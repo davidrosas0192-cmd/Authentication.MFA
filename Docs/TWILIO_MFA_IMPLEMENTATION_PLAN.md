@@ -163,6 +163,8 @@ Log both domain audit and app logs:
   - auth.mfa.challenge.started
   - auth.mfa.challenge.verified
   - auth.mfa.challenge.failed
+  - auth.mfa.methods.read
+  - auth.mfa.devices.read
 
 Do not log OTP codes or Twilio auth tokens.
 
@@ -197,6 +199,7 @@ Test cases:
 - Method tampering attempts (user A cannot verify user B challenge).
 - Secret leakage checks in logs and responses.
 - Twilio webhook/signature validation if callbacks are used.
+- Verify FIDO2 enrollment cannot be completed by a different authenticated user than the one that created the transaction.
 
 ## Implementation Order (Execution)
 1. Add entities, configurations, migration for UserMfaMethods and MfaChallenges.

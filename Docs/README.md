@@ -10,7 +10,7 @@ This project is an ASP.NET Core REST API for password-based authentication plus 
 - Supports Twilio Verify OTP enrollment and verification for SMS and email methods
 - Issues JWT access and refresh tokens
 - Stores user, credential, token-session, and transaction data in SQL Server using Entity Framework Core
-- Stores OWASP-aligned security audit events for authentication flows
+- Stores OWASP-aligned security audit events for authentication, MFA, FIDO2, and public user creation flows
 
 ## Tech stack
 
@@ -90,12 +90,12 @@ This response shaping is centralized in Common/Result.cs.
 
 ## Security Audit Logging
 
-OWASP-aligned audit logging is implemented for authentication and FIDO2 flows.
+OWASP-aligned audit logging is implemented for authentication, MFA, FIDO2, and public user creation flows.
 
 - AuthenticationAuditEvents: authentication attempt telemetry
 - SecurityAuditEvents: security event ledger with contextual metadata
 
-Audit writes are centralized in Services/Implementatons/AuditService.cs and integrated into AuthService and Fido2MfaService.
+Audit writes are centralized in Services/Implementatons/AuditService.cs and integrated into AuthService, MfaService, Fido2MfaService, and UserRegistrationService.
 
 See:
 
@@ -144,6 +144,7 @@ The API is REST-friendly, but not pure CRUD REST everywhere because authenticati
 2. Request enrollment options with `POST /api/fido2/enrollment/options`.
 3. Complete attestation with the authenticator through `POST /api/fido2/enrollment/complete`.
 4. The credential is stored and FIDO2 MFA is enabled for the user.
+5. Completion is bound to the authenticated user that created the transaction.
 
 ### FIDO2 Login
 

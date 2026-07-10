@@ -12,4 +12,5 @@ public class LoginResponse
     public bool MfaRequired { get; set; }
     public Guid? MfaTransactionId { get; set; }
     public List<string> AllowedMfaMethods { get; set; } = [];
+    public List<string> AvailableMfaSetupOptions { get; set; } = [];
 }

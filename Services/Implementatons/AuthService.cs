@@ -1,4 +1,5 @@
 using Authentication.Fido2.Common;
+using Authentication.Fido2.Constants;
 using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.DTOs.Auth;
 using Authentication.Fido2.Options;
@@ -172,6 +173,11 @@ public class AuthService : IAuthService
                 AccessToken = _tokenService.CreateAccessToken(user),
                 RefreshToken = _tokenService.CreateRefreshToken(),
                 ExpiresIn = 15 * 60,
+                AvailableMfaSetupOptions = [
+                    MfaMethodTypes.Sms,
+                    MfaMethodTypes.Email,
+                    MfaMethodTypes.Fido2,
+                ],
             },
             "Authentication succeeded."
         );

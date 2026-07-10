@@ -5,7 +5,7 @@
 - OTP challenge start/verify no longer require `mfaTransactionId` in request body.
 - Controller and service flow are now token-driven for MFA transaction context.
 - Frontend challenge forms no longer send transaction id.
-- API docs updated to reflect hardened contract.
+- API docs updated to reflect the hardened REST contract.
 
 ## Objective
 Strengthen the MFA login flow for penetration testing by removing client-controlled transaction coupling in request payloads and enforcing a server-trusted token-driven model.
@@ -14,15 +14,15 @@ Strengthen the MFA login flow for penetration testing by removing client-control
 Use the MFA JWT claims (`mfa_tx`, `jti`, `sub`) and server-side session checks as the only source of truth for MFA transaction context.
 
 ## Current Risk Summary
-- MFA/FIDO2 login endpoints accept `mfaTransactionId` from request body in some flows.
-- Even with validation, client-supplied transaction identifiers increase tampering surface.
-- Pentesting usually targets parameter tampering, replay attempts, and context confusion.
+- Parameter tampering risk has been reduced by removing request-body transaction coupling.
+- Remaining abuse cases are handled by token/session validation and short-lived challenge TTLs.
+- Pentesting focus should now be on replay attempts, expired token use, and session mismatch.
 
-## Target Design
-1. Keep issuing `mfaTransactionId` during login for traceability if needed.
-2. Stop requiring `mfaTransactionId` in MFA verification request bodies.
+## Final Design
+1. Keep issuing `mfaTransactionId` during login for traceability.
+2. Do not require `mfaTransactionId` in MFA verification request bodies.
 3. Resolve transaction context only from MFA token claims plus DB session validation.
-4. Keep one active session policy and token revocation lifecycle already implemented.
+4. Keep one active session policy and token revocation lifecycle.
 
 ## Scope Of Changes
 
@@ -140,6 +140,12 @@ Changes:
 4. Frontend payload updates.
 5. Documentation updates.
 6. Build + regression tests.
+
+## Current State
+
+- Completed: DTO, controller, service, frontend, and documentation updates.
+- Verified: build passes after the hardened flow changes.
+- Open only if desired: rate limits, lockout policy tuning, and additional security audit event types.
 
 ## Rollback Strategy
 1. Keep migration-free API contract changes in a dedicated commit.

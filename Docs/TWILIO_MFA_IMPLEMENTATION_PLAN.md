@@ -14,12 +14,12 @@ Enable users to have one or more MFA methods enabled at the same time:
 This plan uses Twilio for OTP delivery and keeps FIDO2 as an existing factor.
 
 ## Current State
-- User MFA model is a single flag: IsFido2MfaEnabled in Entities/User.cs.
-- Login currently supports password + optional FIDO2 challenge flow.
-- No method registry exists to represent multiple active factors.
+- User MFA state is represented by `UserMfaMethods`.
+- Login supports password plus optional MFA challenge flow.
+- SMS, email, and FIDO2 can coexist as enabled methods.
 
-## Target Design
-Use a factor registry model (recommended) instead of boolean flags.
+## Final Design
+Use a factor registry model rather than boolean flags.
 
 ### New Tables
 1. UserMfaMethods
@@ -86,38 +86,38 @@ Security notes:
 
 ## API Contract Changes
 ### New/Updated Endpoints
-1. GET /api/mfa/methods
+1. `GET /api/mfa/methods`
 - Returns all available/enabled methods for current user.
 
-2. POST /api/mfa/challenges/start
+2. `POST /api/mfa/challenges/start`
 - Input: method (sms/email/fido2).
 - Transaction context is resolved from MFA token claims (`mfa_tx`) and active session.
 - Output: challenge metadata and expiration.
 
-3. POST /api/mfa/challenges/verify
+3. `POST /api/mfa/challenges/verify`
 - Input: OTP code (for sms/email) or fido2 payload.
 - Transaction context is resolved from MFA token claims (`mfa_tx`) and active session.
 - Output: authenticated tokens if successful.
 
-4. GET /api/mfa/devices/available
+4. `GET /api/mfa/devices/available`
 - Input: full access token.
 - Output: configured methods + remaining setup options.
 
-4. POST /api/mfa/enrollment/start
+5. `POST /api/mfa/enrollment/start`
 - Input: method (sms or email) + contact value.
 - Output: enrollment transaction metadata and expiration.
 
-5. POST /api/mfa/enrollment/verify
+6. `POST /api/mfa/enrollment/verify`
 - Input: enrollmentTransactionId + OTP code.
 - Output: method verified and enabled for user.
 
 ### Login Flow Update
-- After password validation, fetch enabled methods from UserMfaMethods.
+- After password validation, fetch enabled methods from `UserMfaMethods`.
 - If no enabled method: issue tokens directly.
 - If methods exist:
-  - Return RequiresMfa = true
-  - Return AllowedMfaMethods array in LoginResponse
-  - Return MfaToken (temporary token) and MfaTransactionId
+  - Return `RequiresMfa = true`
+  - Return `AllowedMfaMethods` array in `LoginResponse`
+  - Return `MfaToken` (temporary token) and `MfaTransactionId`
   - Client chooses method and starts challenge
 
 After full authentication:
@@ -214,7 +214,7 @@ Test cases:
 - Audit logs capture MFA enrollment and challenge lifecycle.
 - Production logging remains error-focused while security audit persists.
 
-## Implementation Status (Current)
+## Implementation Status
 - Implemented schema:
   - UserMfaMethods
   - MfaChallenges (including Purpose and ContactValue)
@@ -234,4 +234,4 @@ Test cases:
 - Implemented enrollment endpoints for sms/email:
   - /api/mfa/enrollment/start
   - /api/mfa/enrollment/verify
-- Existing FIDO2 enrollment/login flows remain active in Fido2Controller
+- Existing FIDO2 enrollment/login flows remain active in `Fido2Controller`.

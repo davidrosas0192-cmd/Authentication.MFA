@@ -1,4 +1,4 @@
-# OWASP-Aligned Audit Plan For Penetration Testing
+# OWASP-Aligned Audit Coverage
 
 ## Scope
 This API handles sensitive authentication workflows (password login + FIDO2 MFA). To align with OWASP guidance (OWASP ASVS + OWASP Logging Cheat Sheet), auditing must capture authentication and security-relevant events with tamper-resistant metadata and no sensitive secrets.
@@ -29,9 +29,9 @@ This API handles sensitive authentication workflows (password login + FIDO2 MFA)
 - `CorrelationId` (request traceability)
 - `UserId` (nullable where unknown)
 
-## Event Coverage (Implemented)
+## Event Coverage
 - Password login success/failure.
-- MFA required login handoff (MfaTransactionId + MfaToken issuance).
+- MFA required login handoff (`MfaTransactionId` + `MfaToken` issuance).
 - Full token session issuance/revocation events (login rotation, logout).
 - MFA temp token cancellation/revocation events.
 - SMS/Email enrollment start/verify success/failure.
@@ -41,6 +41,11 @@ This API handles sensitive authentication workflows (password login + FIDO2 MFA)
 - FIDO2 login option issuance success/failure.
 - FIDO2 login completion success/failure.
 - Validation failures (invalid/expired/used transaction).
+
+## Status
+
+- Implemented in the current API.
+- The remaining work is operational follow-up such as retention, archiving, and alerting.
 
 ## Implementation References
 - Audit service interface: Services/Interfaces/IAuditService.cs

@@ -1,8 +1,8 @@
-# MFA and FIDO2 Execution Plan
+# MFA and FIDO2 Implementation Summary
 
-## Goal
+## Scope
 
-Implement a secure authentication flow where:
+Implemented a secure authentication flow where:
 
 - Public user registration is allowed.
 - Password login returns an MFA temporary token when MFA is required.
@@ -11,7 +11,7 @@ Implement a secure authentication flow where:
 - Enrollment endpoints remain protected by full access token.
 - OWASP-aligned auditing is captured for critical steps.
 
-## Implemented scope
+## Implemented Scope
 
 1. Public user creation endpoint.
 2. MFA temp token session schema to support token lifecycle checks.
@@ -56,7 +56,7 @@ flowchart TD
     R --> S[POST /api/mfa/enrollment/* and /api/fido2/enrollment/*]
 ```
 
-## OWASP notes applied
+## OWASP Notes Applied
 
 - Short-lived MFA token with transaction binding.
 - Replay resistance by consuming token sessions on successful verification.
@@ -65,7 +65,7 @@ flowchart TD
 - Audit events emitted for user creation, MFA, and FIDO2 operations.
 - Password storage moved to PBKDF2 hash format for new users.
 
-## Next hardening steps
+## Optional Hardening
 
 1. Add rate limiting and CAPTCHA for public user creation.
 2. Add token revocation endpoint for active MFA temp sessions.

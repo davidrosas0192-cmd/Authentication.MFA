@@ -1,6 +1,21 @@
 (() => {
   const STORAGE_KEY = "mfa_client_state_v1";
   const ALL_MFA_OPTIONS = ["sms", "email", "fido2"];
+  const ENDPOINTS = {
+    users: ["/api/users"],
+    sessionLogin: ["/api/sessions", "/api/auth/login"],
+    sessionLogout: ["/api/sessions/current", "/api/auth/logout"],
+    sessionCancelMfa: ["/api/mfa/sessions/current", "/api/auth/cancel-authentication"],
+    mfaSetupOptions: ["/api/mfa/setup-options", "/api/mfa/devices/available"],
+    mfaChallengeStart: ["/api/mfa/challenges", "/api/mfa/challenges/start"],
+    mfaChallengeVerify: ["/api/mfa/challenges/current", "/api/mfa/challenges/verify"],
+    mfaEnrollmentStart: ["/api/mfa/enrollments", "/api/mfa/enrollment/start"],
+    mfaEnrollmentVerify: ["/api/mfa/enrollments/current", "/api/mfa/enrollment/verify"],
+    fido2LoginOptions: ["/api/fido2/authentications", "/api/fido2/login/options"],
+    fido2LoginComplete: ["/api/fido2/authentications/current", "/api/fido2/login/complete"],
+    fido2EnrollOptions: ["/api/fido2/enrollments", "/api/fido2/enrollment/options"],
+    fido2EnrollComplete: ["/api/fido2/enrollments/current", "/api/fido2/enrollment/complete"],
+  };
 
   const logs = [];
 
@@ -299,11 +314,11 @@
     if (verify === "sms" || verify === "email") {
       refs.verifyEndpointsHint.hidden = false;
       refs.verifyEndpointsHint.innerHTML =
-        `<strong>Use these endpoints:</strong><br/><code>POST /api/mfa/challenges/start</code><br/><code>POST /api/mfa/challenges/verify</code>`;
+        `<strong>Use these endpoints:</strong><br/><code>POST /api/mfa/challenges</code><br/><code>PATCH /api/mfa/challenges/current</code>`;
     } else if (verify === "fido2") {
       refs.verifyEndpointsHint.hidden = false;
       refs.verifyEndpointsHint.innerHTML =
-        `<strong>Use these endpoints:</strong><br/><code>POST /api/fido2/login/options</code><br/><code>POST /api/fido2/login/complete</code>`;
+        `<strong>Use these endpoints:</strong><br/><code>POST /api/fido2/authentications</code><br/><code>PATCH /api/fido2/authentications/current</code>`;
     } else {
       refs.verifyEndpointsHint.hidden = true;
       refs.verifyEndpointsHint.innerHTML = "";
@@ -313,11 +328,11 @@
     if (setup === "sms" || setup === "email") {
       refs.setupEndpointsHint.hidden = false;
       refs.setupEndpointsHint.innerHTML =
-        `<strong>Use these endpoints:</strong><br/><code>POST /api/mfa/enrollment/start</code><br/><code>POST /api/mfa/enrollment/verify</code>`;
+        `<strong>Use these endpoints:</strong><br/><code>POST /api/mfa/enrollments</code><br/><code>PATCH /api/mfa/enrollments/current</code>`;
     } else if (setup === "fido2") {
       refs.setupEndpointsHint.hidden = false;
       refs.setupEndpointsHint.innerHTML =
-        `<strong>Use these endpoints:</strong><br/><code>POST /api/fido2/enrollment/options</code><br/><code>POST /api/fido2/enrollment/complete</code>`;
+        `<strong>Use these endpoints:</strong><br/><code>POST /api/fido2/enrollments</code><br/><code>PATCH /api/fido2/enrollments/current</code>`;
     } else {
       refs.setupEndpointsHint.hidden = true;
       refs.setupEndpointsHint.innerHTML = "";
@@ -346,7 +361,7 @@
       return;
     }
 
-    const result = await apiCall("/api/mfa/devices/available", "GET", null, "full");
+    const result = await apiCallPreferred(ENDPOINTS.mfaSetupOptions, "GET", null, "full");
     if (!result.success || !result.data) {
       return;
     }
@@ -366,6 +381,42 @@
   }
 
   async function apiCall(path, method, body, authType) {
+    const result = await sendRequest(path, method, body, authType);
+    if (result.error) {
+      appendLog(result.logEntry);
+      throw result.error;
+    }
+
+    appendLog(result.logEntry);
+    return result.response;
+  }
+
+  async function apiCallPreferred(paths, method, body, authType) {
+    let lastError = null;
+
+    for (let index = 0; index < paths.length; index += 1) {
+      const path = paths[index];
+      const result = await sendRequest(path, method, body, authType);
+
+      if (result.error) {
+        appendLog(result.logEntry);
+        throw result.error;
+      }
+
+      if (result.response.ok || result.response.status !== 404 || index === paths.length - 1) {
+        appendLog(result.logEntry);
+        return result.response;
+      }
+    }
+
+    if (lastError) {
+      throw lastError;
+    }
+
+    return { ok: false, success: false, status: 404, payload: null, data: null };
+  }
+
+  async function sendRequest(path, method, body, authType) {
     const url = endpoint(path);
     const headers = {
       "Content-Type": "application/json",
@@ -406,33 +457,38 @@
         }
       }
 
-      appendLog({
-        startedAt,
-        method,
-        path,
-        requestBody: body,
-        status: response.status,
-        responseBody: parsed || raw,
-      });
-
       const success = !!(parsed && parsed.success === true);
       return {
+        logEntry: {
+          startedAt,
+          method,
+          path,
+          requestBody: body,
+          status: response.status,
+          responseBody: parsed || raw,
+        },
         ok: response.ok,
-        success,
-        status: response.status,
-        payload: parsed,
-        data: parsed && typeof parsed === "object" ? parsed.data : null,
+        response: {
+          ok: response.ok,
+          success,
+          status: response.status,
+          payload: parsed,
+          data: parsed && typeof parsed === "object" ? parsed.data : null,
+        },
       };
     } catch (error) {
-      appendLog({
-        startedAt,
-        method,
-        path,
-        requestBody: body,
-        status: "NETWORK_ERROR",
-        responseBody: { message: error.message },
-      });
-      throw error;
+      return {
+        logEntry: {
+          startedAt,
+          method,
+          path,
+          requestBody: body,
+          status: "NETWORK_ERROR",
+          responseBody: { message: error.message },
+        },
+        response: null,
+        error,
+      };
     }
   }
 
@@ -541,7 +597,7 @@
       password: refs.createPassword.value,
     };
 
-    const result = await apiCall("/api/users", "POST", payload, "none");
+    const result = await apiCallPreferred(ENDPOINTS.users, "POST", payload, "none");
     if (result.success) {
       state.lastLoginUsername = payload.username;
       persistState();
@@ -561,7 +617,7 @@
       password: refs.loginPassword.value,
     };
 
-    const result = await apiCall("/api/auth/login", "POST", payload, "none");
+    const result = await apiCallPreferred(ENDPOINTS.sessionLogin, "POST", payload, "none");
     if (!result.success || !result.data) {
       return;
     }
@@ -609,7 +665,7 @@
       beginAction("Logout");
 
       try {
-        await apiCall("/api/auth/logout", "POST", {}, "full");
+        await apiCallPreferred(ENDPOINTS.sessionLogout, "DELETE", null, "full");
       } finally {
         clearSession();
       }
@@ -621,7 +677,7 @@
       beginAction("Cancel Authentication");
 
       try {
-        await apiCall("/api/auth/cancel-authentication", "POST", {}, "mfa");
+        await apiCallPreferred(ENDPOINTS.sessionCancelMfa, "DELETE", null, "mfa");
       } finally {
         clearSession();
       }
@@ -636,7 +692,7 @@
       method: refs.challengeMethod.value,
     };
 
-    await apiCall("/api/mfa/challenges/start", "POST", payload, "mfa");
+    await apiCallPreferred(ENDPOINTS.mfaChallengeStart, "POST", payload, "mfa");
     focusCard(refs.mfaChallengeCard);
   }
 
@@ -648,7 +704,7 @@
       code: refs.verifyChallengeCode.value.trim(),
     };
 
-    const result = await apiCall("/api/mfa/challenges/verify", "POST", payload, "mfa");
+    const result = await apiCallPreferred(ENDPOINTS.mfaChallengeVerify, "POST", payload, "mfa");
     if (!result.success || !result.data) {
       return;
     }
@@ -669,7 +725,7 @@
       usernameOrEmail: state.lastLoginUsername || "",
     };
 
-    const result = await apiCall("/api/fido2/login/options", "POST", payload, "mfa");
+    const result = await apiCallPreferred(ENDPOINTS.fido2LoginOptions, "POST", payload, "mfa");
     if (!result.success || !result.data) {
       return;
     }
@@ -698,7 +754,7 @@
       assertionResponse,
     };
 
-    const result = await apiCall("/api/fido2/login/complete", "POST", payload, "mfa");
+    const result = await apiCallPreferred(ENDPOINTS.fido2LoginComplete, "PATCH", payload, "mfa");
     if (!result.success || !result.data) {
       return;
     }
@@ -725,7 +781,7 @@
 
     state.lastEnrollmentMethod = payload.method;
 
-    const result = await apiCall("/api/mfa/enrollment/start", "POST", payload, "full");
+    const result = await apiCallPreferred(ENDPOINTS.mfaEnrollmentStart, "POST", payload, "full");
     if (!result.success || !result.data) {
       return;
     }
@@ -749,7 +805,7 @@
       code: refs.enrollCode.value.trim(),
     };
 
-    const result = await apiCall("/api/mfa/enrollment/verify", "POST", payload, "full");
+    const result = await apiCallPreferred(ENDPOINTS.mfaEnrollmentVerify, "PATCH", payload, "full");
     if (!result.success) {
       return;
     }
@@ -770,7 +826,7 @@
   async function onFido2EnrollOptions() {
     beginAction("FIDO2 Enrollment Options");
 
-    const result = await apiCall("/api/fido2/enrollment/options", "POST", {}, "full");
+    const result = await apiCallPreferred(ENDPOINTS.fido2EnrollOptions, "POST", {}, "full");
     if (!result.success || !result.data) {
       return;
     }
@@ -808,7 +864,7 @@
       attestationResponse,
     };
 
-    const result = await apiCall("/api/fido2/enrollment/complete", "POST", payload, "full");
+    const result = await apiCallPreferred(ENDPOINTS.fido2EnrollComplete, "PATCH", payload, "full");
     if (!result.success) {
       return;
     }

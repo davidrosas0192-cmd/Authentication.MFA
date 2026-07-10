@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the high-level design of the Authentication Fido2 API.
+This document describes the high-level design of the Authentication Fido2 REST API.
 
 ## Overview
 
@@ -34,9 +34,9 @@ flowchart LR
 
 ## Layers
 
-## 1. Presentation layer
+## 1. Presentation Layer
 
-Controllers expose HTTP endpoints for:
+Controllers expose REST endpoints for:
 
 - password login
 - MFA methods and challenge orchestration
@@ -50,7 +50,7 @@ Key files:
 - Controllers/MfaController.cs
 - Controllers/Fido2Controller.cs
 
-## 2. Application layer
+## 2. Application Layer
 
 Services implement business workflows:
 
@@ -68,7 +68,7 @@ Key files:
 - Services/Implementatons/TokenService.cs
 - Services/Implementatons/TwilioOtpService.cs
 
-## 3. Data access layer
+## 3. Data Access Layer
 
 Repositories abstract EF Core access for users, credentials, transactions, methods, and challenges.
 
@@ -80,7 +80,7 @@ Key responsibilities:
 - MFA method registry access
 - MFA challenge lifecycle persistence
 
-## 4. Persistence layer
+## 4. Persistence Layer
 
 EF Core maps entities and migrations to SQL Server.
 
@@ -90,7 +90,7 @@ Key files:
 - Data/Configurations/*.cs
 - Migrations/
 
-## 5. Observability and audit layer
+## 5. Observability and Audit Layer
 
 Security/authentication auditing is implemented through explicit audit records written by AuditService.
 
@@ -105,7 +105,7 @@ Security/authentication auditing is implemented through explicit audit records w
 - MfaChallenge: MFA login/enrollment challenge lifecycle
 - AuthenticationAuditEvent / SecurityAuditEvent: audit trails
 
-## Token model
+## Token Model
 
 - Full access token:
   - Used for authenticated API operations
@@ -115,9 +115,9 @@ Security/authentication auditing is implemented through explicit audit records w
   - Temporary token issued only when login requires MFA
   - Bound to mfa transaction claim and validated on MFA challenge endpoints
 
-## Authentication flows
+## Authentication Flows
 
-## Standard login
+## Standard Login
 
 1. Client calls /api/auth/login with username/password.
 2. If no MFA methods are enabled, full access token is returned.
@@ -126,22 +126,29 @@ Security/authentication auditing is implemented through explicit audit records w
    - MfaTransactionId
    - MfaToken
 4. Client completes MFA to receive full access token.
+5. Challenge endpoints resolve transaction context from the MFA token claims and session state, not from request-body transaction identifiers.
 
-## SMS/Email enrollment
+## SMS/Email Enrollment
 
 1. Authenticated user starts enrollment (/api/mfa/enrollment/start).
 2. Service creates enrollment challenge and sends OTP via Twilio Verify.
 3. User verifies OTP (/api/mfa/enrollment/verify).
 4. UserMfaMethod is inserted/updated as enabled and verified.
 
-## SMS/Email MFA login challenge
+## SMS/Email MFA Login Challenge
 
 1. Client starts challenge with MFA token (/api/mfa/challenges/start).
 2. Client verifies OTP with MFA token (/api/mfa/challenges/verify).
 3. MFA transaction context is resolved from token claims (`mfa_tx`) and active token session, not from request body.
-3. Service returns full access token on success.
+4. Service returns full access token on success.
 
-## FIDO2 enrollment/login
+## Current API Shape
+
+- Login returns `AllowedMfaMethods` plus `MfaTransactionId` and `MfaToken` when MFA is required.
+- SMS and email challenge requests do not send `mfaTransactionId` in the body.
+- FIDO2 login continues to use the MFA token and token-session validation.
+
+## FIDO2 Enrollment/Login
 
 FIDO2 flows remain available through Fido2Controller and Fido2MfaService.
 

@@ -56,6 +56,7 @@ public class MfaController : ControllerBase
 
     [Authorize]
     [HttpGet("devices/available")]
+    [HttpGet("/api/mfa/setup-options")]
     public async Task<IActionResult> GetDevicesAvailable(CancellationToken cancellationToken)
     {
         try
@@ -89,6 +90,7 @@ public class MfaController : ControllerBase
     }
 
     [HttpPost("challenges/start")]
+    [HttpPost("/api/mfa/challenges")]
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
     public async Task<IActionResult> StartChallenge(
         [FromBody] StartMfaChallengeRequest request,
@@ -122,6 +124,7 @@ public class MfaController : ControllerBase
     }
 
     [HttpPost("challenges/verify")]
+    [HttpPatch("/api/mfa/challenges/current")]
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
     public async Task<IActionResult> VerifyChallenge(
         [FromBody] VerifyMfaChallengeRequest request,
@@ -162,6 +165,7 @@ public class MfaController : ControllerBase
 
     [Authorize]
     [HttpPost("enrollment/start")]
+    [HttpPost("/api/mfa/enrollments")]
     public async Task<IActionResult> StartEnrollment(
         [FromBody] StartMfaEnrollmentRequest request,
         CancellationToken cancellationToken
@@ -193,6 +197,7 @@ public class MfaController : ControllerBase
 
     [Authorize]
     [HttpPost("enrollment/verify")]
+    [HttpPatch("/api/mfa/enrollments/current")]
     public async Task<IActionResult> VerifyEnrollment(
         [FromBody] VerifyMfaEnrollmentRequest request,
         CancellationToken cancellationToken

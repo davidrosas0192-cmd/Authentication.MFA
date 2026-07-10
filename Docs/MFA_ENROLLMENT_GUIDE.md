@@ -1,6 +1,6 @@
 # MFA Enrollment Guide
 
-This guide describes MFA enrollment options currently available in the API.
+This guide describes the MFA enrollment options currently available in the REST API.
 
 ## Supported Enrollment Paths
 
@@ -16,16 +16,16 @@ This guide describes MFA enrollment options currently available in the API.
   - POST /api/mfa/enrollment/start
   - POST /api/mfa/enrollment/verify
 
-## FIDO2 Enrollment (already implemented)
+## FIDO2 Enrollment (Already Implemented)
 
-1. User authenticates with JWT.
-2. Client requests options from /api/fido2/enrollment/options.
-3. Client completes attestation and sends payload to /api/fido2/enrollment/complete.
-4. FIDO2 credential is stored and user FIDO2 capability remains available.
+1. User authenticates with a full access token.
+2. Client requests options from `POST /api/fido2/enrollment/options`.
+3. Client completes attestation and sends payload to `POST /api/fido2/enrollment/complete`.
+4. FIDO2 credential is stored and the user FIDO2 capability remains available.
 
-## SMS/Email Enrollment (new)
+## SMS/Email Enrollment (implemented)
 
-### Start enrollment
+### Start Enrollment
 
 POST /api/mfa/enrollment/start
 
@@ -53,7 +53,7 @@ Response includes:
 - status
 - expiresAtUtc
 
-### Verify enrollment
+### Verify Enrollment
 
 POST /api/mfa/enrollment/verify
 
@@ -72,7 +72,7 @@ On success:
 - IsVerified = true
 - ContactValue set to verified destination
 
-## Login behavior with MFA
+## Login Behavior With MFA
 
 After password validation:
 - If MFA methods exist, login returns:
@@ -87,15 +87,15 @@ After password validation:
 After full authentication:
 - Call GET /api/mfa/devices/available to populate remaining setup options.
 
-## Token requirements
+## Token Requirements
 
-- Enrollment endpoints require full access token (Bearer access token):
-  - /api/mfa/enrollment/start
-  - /api/mfa/enrollment/verify
+- Enrollment endpoints require a full access token:
+  - `POST /api/mfa/enrollment/start`
+  - `POST /api/mfa/enrollment/verify`
 
-- Login challenge endpoints require MFA token (Bearer mfa token):
-  - /api/mfa/challenges/start
-  - /api/mfa/challenges/verify
+- Login challenge endpoints require an MFA token:
+  - `POST /api/mfa/challenges/start`
+  - `POST /api/mfa/challenges/verify`
 
 - For challenge start/verify, request body no longer sends `mfaTransactionId`.
 - Server resolves transaction context from `mfa_tx` claim + active MFA token session.
@@ -115,3 +115,9 @@ Twilio settings in appsettings or secret store:
 - Use production secret storage for Twilio credentials.
 - Use real E.164 phone format for sms channel.
 - Keep rate limits and lockout protections enabled in future hardening.
+
+## Current Behavior
+
+- SMS and email enrollment are exposed as REST endpoints under `/api/mfa/enrollment/*`.
+- The login response remains the source of truth for allowed MFA methods.
+- Enrollment state is persisted in `UserMfaMethods`.

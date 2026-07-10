@@ -2,7 +2,7 @@
 
 ## Objective
 
-Build a friendly web client inside `wwwroot` to test authentication, MFA, and FIDO2 endpoints with full request/response visibility.
+Build a friendly web client inside `wwwroot` to test authentication, MFA, and FIDO2 REST endpoints with full request/response visibility.
 
 ## Functional Requirements
 
@@ -10,7 +10,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 2. Run login and handle two results:
    - fully authenticated (`Authenticated`)
    - MFA required (`RequiresMfa`)
-3. When login returns `Authenticated`, call `GET /api/mfa/devices/available` and show setup options from backend response.
+3. When login returns `Authenticated`, call `GET /api/mfa/devices/available` and show setup options from the backend response.
    - sms
    - email
    - fido2 passwordless
@@ -100,25 +100,23 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 
 1. Create user (`POST /api/users`).
 2. Login (`POST /api/auth/login`).
-3. If `Authenticated` and there are missing methods based on `AllowedMfaMethods`:
 3. If `Authenticated`:
    - call `GET /api/mfa/devices/available`
-   - if `availableMfaSetupOptions` has values, show setup options screen
-   - show MFA setup screen with `sms`, `email`, `fido2`
-   - after selection, show only the selected enrollment flow
+   - if `availableMfaSetupOptions` has values, show the setup options screen
+   - show only the selected enrollment flow after a method is chosen
    - show endpoints for the selected enrollment method
-   - run selected enrollment flow with full token
+   - run the selected enrollment flow with a full access token
 4. If `RequiresMfa`:
    - read `AllowedMfaMethods`
    - show available method/device selection screen
 5. User selects a method:
    - show only the selected verification flow
    - show endpoints for the selected verification method
-    - use MFA temp token for:
-     - `POST /api/mfa/challenges/start`
-     - `POST /api/mfa/challenges/verify`
-     - or `POST /api/fido2/login/options` + `POST /api/fido2/login/complete`
-    - challenge start/verify payload does not include `mfaTransactionId`
+   - use MFA temp token for:
+       - `POST /api/mfa/challenges/start`
+       - `POST /api/mfa/challenges/verify`
+       - or `POST /api/fido2/login/options` + `POST /api/fido2/login/complete`
+   - challenge start/verify payload does not include `mfaTransactionId`
 6. After successful MFA/FIDO2 login:
    - store full access token
 7. With full token:

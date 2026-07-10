@@ -248,45 +248,28 @@ public class Fido2MfaService : IFido2MfaService
     }
 
     public async Task<Result<Fido2OptionsResponse>> CreateLoginOptionsAsync(
-        CreateFido2LoginOptionsRequest request,
+        long userId,
+        Guid mfaTransactionId,
         string ipAddress,
         string userAgent,
         CancellationToken cancellationToken
     )
     {
-        if (string.IsNullOrWhiteSpace(request.UsernameOrEmail))
-        {
-            await _auditService.TrackAuthenticationEventAsync(
-                null,
-                request.UsernameOrEmail,
-                "fido2_login_options",
-                "fido2",
-                false,
-                "Username or email is required",
-                cancellationToken
-            );
-
-            return Result<Fido2OptionsResponse>.Failure("Username or email is required.", StatusCodes.Status400BadRequest);
-        }
-
-        var user = await _userRepository.GetByUsernameOrEmailAsync(
-            request.UsernameOrEmail,
-            cancellationToken
-        );
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
 
         if (user is null)
         {
             await _auditService.TrackAuthenticationEventAsync(
+                userId,
                 null,
-                request.UsernameOrEmail,
                 "fido2_login_options",
                 "fido2",
                 false,
-                "Invalid request",
+                "User not found",
                 cancellationToken
             );
 
-            return Result<Fido2OptionsResponse>.Failure("Invalid request.", StatusCodes.Status400BadRequest);
+            return Result<Fido2OptionsResponse>.Failure("User not found.", StatusCodes.Status404NotFound);
         }
 
         if (!user.IsActive)
@@ -360,6 +343,7 @@ public class Fido2MfaService : IFido2MfaService
             UserAgent = userAgent,
             CreatedAtUtc = DateTime.UtcNow,
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            ParentMfaTransactionId = mfaTransactionId,
         };
 
         await _transactionRepository.AddAsync(transaction, cancellationToken);
@@ -381,7 +365,7 @@ public class Fido2MfaService : IFido2MfaService
             user.Id,
             user.Username,
             null,
-            new { transactionId = transaction.Id },
+            new { transactionId = transaction.Id, mfaTransactionId },
             cancellationToken
         );
 
@@ -393,6 +377,8 @@ public class Fido2MfaService : IFido2MfaService
 
     public async Task<Result<LoginResponse>> CompleteLoginAsync(
         CompleteFido2LoginRequest request,
+        long userId,
+        Guid mfaTransactionId,
         CancellationToken cancellationToken
     )
     {
@@ -418,6 +404,36 @@ public class Fido2MfaService : IFido2MfaService
             );
 
             return validationResult;
+        }
+
+        if (transaction!.UserId != userId)
+        {
+            await _auditService.TrackAuthenticationEventAsync(
+                transaction.UserId,
+                null,
+                "fido2_login_complete",
+                "fido2",
+                false,
+                "Transaction user does not match token user",
+                cancellationToken
+            );
+
+            return Result<LoginResponse>.Failure("Invalid MFA token context.", StatusCodes.Status401Unauthorized);
+        }
+
+        if (transaction.ParentMfaTransactionId != mfaTransactionId)
+        {
+            await _auditService.TrackAuthenticationEventAsync(
+                transaction.UserId,
+                null,
+                "fido2_login_complete",
+                "fido2",
+                false,
+                "MFA transaction mismatch",
+                cancellationToken
+            );
+
+            return Result<LoginResponse>.Failure("Invalid MFA transaction.", StatusCodes.Status401Unauthorized);
         }
 
         var options = AssertionOptions.FromJson(transaction!.OptionsJson);

@@ -19,7 +19,8 @@ public interface IFido2MfaService
     );
 
     Task<Result<Fido2OptionsResponse>> CreateLoginOptionsAsync(
-        CreateFido2LoginOptionsRequest request,
+        long userId,
+        Guid mfaTransactionId,
         string ipAddress,
         string userAgent,
         CancellationToken cancellationToken
@@ -27,6 +28,8 @@ public interface IFido2MfaService
 
     Task<Result<LoginResponse>> CompleteLoginAsync(
         CompleteFido2LoginRequest request,
+        long userId,
+        Guid mfaTransactionId,
         CancellationToken cancellationToken
     );
 }

@@ -22,4 +22,6 @@ public class Fido2Transaction
 
     public DateTime ExpiresAtUtc { get; set; }
 
+    public Guid? ParentMfaTransactionId { get; set; }
+
 }

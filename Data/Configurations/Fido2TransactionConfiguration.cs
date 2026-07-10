@@ -37,5 +37,6 @@ public class Fido2TransactionConfiguration : IEntityTypeConfiguration<Fido2Trans
             .IsRequired();
 
         builder.HasIndex(x => new { x.UserId, x.Type, x.IsUsed });
+        builder.HasIndex(x => x.ParentMfaTransactionId);
     }
 }

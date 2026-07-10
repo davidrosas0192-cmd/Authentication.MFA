@@ -11,6 +11,7 @@ public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly ITokenService _tokenService;
+    private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly IAuditService _auditService;
     private readonly IMfaService _mfaService;
     private readonly MfaJwtOptions _mfaJwtOptions;
@@ -18,6 +19,7 @@ public class AuthService : IAuthService
     public AuthService(
         IUserRepository userRepository,
         ITokenService tokenService,
+        IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
         IAuditService auditService,
         IMfaService mfaService,
         IOptions<MfaJwtOptions> mfaJwtOptions
@@ -25,6 +27,9 @@ public class AuthService : IAuthService
     {
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _tokenService = tokenService;
+        _mfaTempTokenSessionRepository =
+            mfaTempTokenSessionRepository
+            ?? throw new ArgumentNullException(nameof(mfaTempTokenSessionRepository));
         _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
         _mfaService = mfaService ?? throw new ArgumentNullException(nameof(mfaService));
         _mfaJwtOptions = mfaJwtOptions.Value;
@@ -42,7 +47,7 @@ public class AuthService : IAuthService
             cancellationToken
         );
 
-        if (user is null || !user.IsActive || user.PasswordHash != request.Password)
+        if (user is null || !user.IsActive || !PasswordHasher.Verify(request.Password, user.PasswordHash))
         {
             await _auditService.TrackAuthenticationEventAsync(
                 null,
@@ -85,7 +90,23 @@ public class AuthService : IAuthService
                 userAgent,
                 cancellationToken
             );
-            var mfaToken = _tokenService.CreateMfaToken(user, mfaTransactionId);
+            var tokenJti = Guid.NewGuid().ToString("N");
+            var mfaToken = _tokenService.CreateMfaToken(user, mfaTransactionId, tokenJti);
+
+            await _mfaTempTokenSessionRepository.AddAsync(
+                new Entities.MfaTempTokenSession
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    MfaTransactionId = mfaTransactionId,
+                    TokenJti = tokenJti,
+                    IssuedAtUtc = DateTime.UtcNow,
+                    ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_mfaJwtOptions.ExpirationMinutes),
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent,
+                },
+                cancellationToken
+            );
 
             await _auditService.TrackAuthenticationEventAsync(
                 user.Id,

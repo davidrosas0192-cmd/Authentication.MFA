@@ -51,12 +51,13 @@ public class TokenService : ITokenService
         return Convert.ToBase64String(bytes);
     }
 
-    public string CreateMfaToken(User user, Guid mfaTransactionId)
+    public string CreateMfaToken(User user, Guid mfaTransactionId, string tokenJti)
     {
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
+            new(JwtRegisteredClaimNames.Jti, tokenJti),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
             new("token_type", "mfa"),

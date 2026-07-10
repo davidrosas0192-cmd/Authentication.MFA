@@ -1,10 +1,12 @@
 using Authentication.Fido2.Common;
+using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.DTOs.Auth;
 using Authentication.Fido2.DTOs.Mfa;
 using Authentication.Fido2.Extensions;
 using Authentication.Fido2.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace Authentication.Fido2.Controllers;
 
@@ -13,11 +15,17 @@ namespace Authentication.Fido2.Controllers;
 public class MfaController : ControllerBase
 {
     private readonly IMfaService _mfaService;
+    private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly ILogger<MfaController> _logger;
 
-    public MfaController(IMfaService mfaService, ILogger<MfaController> logger)
+    public MfaController(
+        IMfaService mfaService,
+        IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
+        ILogger<MfaController> logger
+    )
     {
         _mfaService = mfaService;
+        _mfaTempTokenSessionRepository = mfaTempTokenSessionRepository;
         _logger = logger;
     }
 
@@ -55,22 +63,19 @@ public class MfaController : ControllerBase
     {
         try
         {
-            var userIdValue = User.FindFirst("sub")?.Value;
-            var tokenType = User.FindFirst("token_type")?.Value;
-            var tokenTransactionId = User.FindFirst("mfa_tx")?.Value;
-
-            if (
-                !long.TryParse(userIdValue, out var userId)
-                || !string.Equals(tokenType, "mfa", StringComparison.OrdinalIgnoreCase)
-                || !Guid.TryParse(tokenTransactionId, out var transactionId)
-                || transactionId != request.MfaTransactionId
-            )
+            var mfaContextResult = await ValidateMfaTokenContext(cancellationToken);
+            if (mfaContextResult.ErrorResult is not null)
             {
-                return Unauthorized(new { message = "Invalid MFA token." });
+                return mfaContextResult.ErrorResult;
+            }
+
+            if (mfaContextResult.MfaTransactionId != request.MfaTransactionId)
+            {
+                return Unauthorized(new { message = "Invalid MFA transaction." });
             }
 
             var response = await _mfaService.StartChallengeAsync(
-                userId,
+                mfaContextResult.UserId,
                 request,
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
                 Request.Headers.UserAgent.ToString(),
@@ -95,25 +100,30 @@ public class MfaController : ControllerBase
     {
         try
         {
-            var userIdValue = User.FindFirst("sub")?.Value;
-            var tokenType = User.FindFirst("token_type")?.Value;
-            var tokenTransactionId = User.FindFirst("mfa_tx")?.Value;
-
-            if (
-                !long.TryParse(userIdValue, out var userId)
-                || !string.Equals(tokenType, "mfa", StringComparison.OrdinalIgnoreCase)
-                || !Guid.TryParse(tokenTransactionId, out var transactionId)
-                || transactionId != request.MfaTransactionId
-            )
+            var mfaContextResult = await ValidateMfaTokenContext(cancellationToken);
+            if (mfaContextResult.ErrorResult is not null)
             {
-                return Unauthorized(new { message = "Invalid MFA token." });
+                return mfaContextResult.ErrorResult;
+            }
+
+            if (mfaContextResult.MfaTransactionId != request.MfaTransactionId)
+            {
+                return Unauthorized(new { message = "Invalid MFA transaction." });
             }
 
             var response = await _mfaService.VerifyChallengeAsync(
-                userId,
+                mfaContextResult.UserId,
                 request,
                 cancellationToken
             );
+
+            if (response.IsSuccess)
+            {
+                await _mfaTempTokenSessionRepository.ConsumeByTransactionAsync(
+                    mfaContextResult.MfaTransactionId,
+                    cancellationToken
+                );
+            }
 
             return ToActionResult(response);
         }
@@ -196,5 +206,37 @@ public class MfaController : ControllerBase
         }
 
         return result.IsSuccess ? Ok(payload) : BadRequest(payload);
+    }
+
+    private async Task<(long UserId, Guid MfaTransactionId, IActionResult? ErrorResult)> ValidateMfaTokenContext(
+        CancellationToken cancellationToken
+    )
+    {
+        var userIdValue = User.FindFirst("sub")?.Value;
+        var tokenType = User.FindFirst("token_type")?.Value;
+        var tokenTransactionId = User.FindFirst("mfa_tx")?.Value;
+        var tokenJti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+
+        if (
+            !long.TryParse(userIdValue, out var userId)
+            || !string.Equals(tokenType, "mfa", StringComparison.OrdinalIgnoreCase)
+            || !Guid.TryParse(tokenTransactionId, out var mfaTransactionId)
+            || string.IsNullOrWhiteSpace(tokenJti)
+        )
+        {
+            return (0, Guid.Empty, Unauthorized(new { message = "Invalid MFA token." }));
+        }
+
+        var tokenSession = await _mfaTempTokenSessionRepository.GetActiveByJtiAsync(
+            tokenJti,
+            cancellationToken
+        );
+
+        if (tokenSession is null || tokenSession.UserId != userId || tokenSession.MfaTransactionId != mfaTransactionId)
+        {
+            return (0, Guid.Empty, Unauthorized(new { message = "MFA token is expired or not valid." }));
+        }
+
+        return (userId, mfaTransactionId, null);
     }
 }

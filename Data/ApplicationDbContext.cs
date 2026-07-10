@@ -17,6 +17,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Fido2Transaction> Fido2Transations => Set<Fido2Transaction>();
     public DbSet<UserMfaMethod> UserMfaMethods => Set<UserMfaMethod>();
     public DbSet<MfaChallenge> MfaChallenges => Set<MfaChallenge>();
+    public DbSet<MfaTempTokenSession> MfaTempTokenSessions => Set<MfaTempTokenSession>();
     public DbSet<SecurityAuditEvent> SecurityAuditEvents => Set<SecurityAuditEvent>();
     public DbSet<AuthenticationAuditEvent> AuthenticationAuditEvents => Set<AuthenticationAuditEvent>();
 

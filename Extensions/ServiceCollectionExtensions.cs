@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
         services.Configure<TwilioOptions>(configuration.GetSection("Twilio"));
         services.AddHttpContextAccessor();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IUserRegistrationService, UserRegistrationService>();
         services.AddScoped<IFido2MfaService, Fido2MfaService>();
         services.AddScoped<IMfaService, MfaService>();
         services.AddScoped<ITwilioOtpService, TwilioOtpService>();
@@ -26,6 +27,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IFido2CredentialRepository, Fido2CredentialRepository>();
         services.AddScoped<IFido2TransactionRepository, Fido2TransactionRepository>();
+        services.AddScoped<IMfaTempTokenSessionRepository, MfaTempTokenSessionRepository>();
         services.AddScoped<IUserMfaMethodRepository, UserMfaMethodRepository>();
         services.AddScoped<IMfaChallengeRepository, MfaChallengeRepository>();
         services.AddScoped<ITokenService, TokenService>();

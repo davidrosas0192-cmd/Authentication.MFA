@@ -25,4 +25,8 @@
     <PackageReference Include="Twilio" Version="7.14.9" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Authentication.Fido2.Tests/**/*.cs" />
+  </ItemGroup>
+
 </Project>

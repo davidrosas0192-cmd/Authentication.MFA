@@ -43,14 +43,15 @@ All controller responses follow this shape:
 2. POST /api/auth/logout (Authorize: access token)
 3. POST /api/auth/cancel-authentication (Authorize: mfa token)
 4. GET /api/mfa/methods (Authorize: access token)
-5. POST /api/mfa/enrollment/start (Authorize: access token)
-6. POST /api/mfa/enrollment/verify (Authorize: access token)
-7. POST /api/mfa/challenges/start (Authorize: mfa token)
-8. POST /api/mfa/challenges/verify (Authorize: mfa token)
-9. POST /api/fido2/enrollment/options (Authorize: access token)
-10. POST /api/fido2/enrollment/complete (Authorize: access token)
-11. POST /api/fido2/login/options (Authorize: mfa token)
-12. POST /api/fido2/login/complete (Authorize: mfa token)
+5. GET /api/mfa/devices/available (Authorize: access token)
+6. POST /api/mfa/enrollment/start (Authorize: access token)
+7. POST /api/mfa/enrollment/verify (Authorize: access token)
+8. POST /api/mfa/challenges/start (Authorize: mfa token)
+9. POST /api/mfa/challenges/verify (Authorize: mfa token)
+10. POST /api/fido2/enrollment/options (Authorize: access token)
+11. POST /api/fido2/enrollment/complete (Authorize: access token)
+12. POST /api/fido2/login/options (Authorize: mfa token)
+13. POST /api/fido2/login/complete (Authorize: mfa token)
 
 ## Token Session Behavior
 

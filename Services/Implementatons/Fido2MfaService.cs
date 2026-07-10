@@ -599,7 +599,7 @@ public class Fido2MfaService : IFido2MfaService
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
                 ExpiresIn = 15 * 60,
-                AvailableMfaSetupOptions = await _mfaService.GetAvailableSetupMethodsAsync(user.Id, cancellationToken),
+                AllowedMfaMethods = await _mfaService.GetAllowedMethodsAsync(user.Id, cancellationToken),
             },
             "Login completed successfully."
         );

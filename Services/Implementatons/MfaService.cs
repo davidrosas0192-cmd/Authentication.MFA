@@ -338,7 +338,7 @@ public class MfaService : IMfaService
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
                 ExpiresIn = 15 * 60,
-                AvailableMfaSetupOptions = await GetAvailableSetupMethodsAsync(user.Id, cancellationToken),
+                AllowedMfaMethods = await GetAllowedMethodsAsync(user.Id, cancellationToken),
             },
             "MFA verification succeeded."
         );

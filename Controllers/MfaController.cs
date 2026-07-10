@@ -54,6 +54,40 @@ public class MfaController : ControllerBase
         }
     }
 
+    [Authorize]
+    [HttpGet("devices/available")]
+    public async Task<IActionResult> GetDevicesAvailable(CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!TryGetUserId(User, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var allowedMethods = await _mfaService.GetAllowedMethodsAsync(userId, cancellationToken);
+            var availableSetupOptions = await _mfaService.GetAvailableSetupMethodsAsync(
+                userId,
+                cancellationToken
+            );
+
+            return ToActionResult(
+                Result<MfaDevicesAvailableResponse>.Success(
+                    new MfaDevicesAvailableResponse
+                    {
+                        AllowedMfaMethods = allowedMethods,
+                        AvailableMfaSetupOptions = availableSetupOptions,
+                    }
+                )
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred getting MFA devices available.");
+            return Problem("An error occurred while retrieving MFA devices available.");
+        }
+    }
+
     [HttpPost("challenges/start")]
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
     public async Task<IActionResult> StartChallenge(

@@ -348,6 +348,21 @@
     refs.fido2EnrollmentCard.hidden = !(hasFullToken && selectedSetupMethod === "fido2");
   }
 
+  async function loadDevicesAvailable() {
+    if (!state.accessToken) {
+      state.availableMfaSetupOptions = [];
+      return;
+    }
+
+    const result = await apiCall("/api/mfa/devices/available", "GET", null, "full");
+    if (!result.success || !result.data) {
+      return;
+    }
+
+    state.allowedMfaMethods = result.data.allowedMfaMethods || [];
+    state.availableMfaSetupOptions = result.data.availableMfaSetupOptions || [];
+  }
+
   function baseUrl() {
     const value = (state.apiBaseUrl || "").trim();
     return value.endsWith("/") ? value.slice(0, -1) : value;
@@ -549,9 +564,9 @@
       state.mfaToken = loginData.mfaToken || null;
       state.mfaTransactionId = loginData.mfaTransactionId || null;
       state.allowedMfaMethods = loginData.allowedMfaMethods || [];
+      state.availableMfaSetupOptions = [];
       state.accessToken = null;
       state.refreshToken = null;
-      state.availableMfaSetupOptions = [];
       state.selectedVerifyMethod = null;
       state.selectedSetupMethod = null;
       focusCard(refs.mfaMethodsCard);
@@ -560,12 +575,12 @@
     if (loginData.status === "Authenticated") {
       state.accessToken = loginData.accessToken || null;
       state.refreshToken = loginData.refreshToken || null;
-      state.availableMfaSetupOptions = loginData.availableMfaSetupOptions || [];
+      state.allowedMfaMethods = loginData.allowedMfaMethods || [];
       state.mfaToken = null;
       state.mfaTransactionId = null;
-      state.allowedMfaMethods = [];
       state.selectedVerifyMethod = null;
       state.selectedSetupMethod = null;
+      await loadDevicesAvailable();
 
       if ((state.availableMfaSetupOptions || []).length > 0) {
         showAuthSuccessPopup("Authenticated successfully.");
@@ -641,7 +656,7 @@
       return;
     }
 
-    hydrateAuthenticatedSession(result.data);
+    await hydrateAuthenticatedSession(result.data);
     state.selectedSetupMethod = null;
     state.selectedVerifyMethod = null;
     persistState();
@@ -691,7 +706,7 @@
       return;
     }
 
-    hydrateAuthenticatedSession(result.data);
+    await hydrateAuthenticatedSession(result.data);
     state.pendingFido2LoginOptions = null;
     state.pendingFido2LoginTransactionId = null;
     state.selectedSetupMethod = null;
@@ -743,14 +758,12 @@
     }
 
     if (state.lastEnrollmentMethod) {
-      state.availableMfaSetupOptions = (state.availableMfaSetupOptions || []).filter(
-        (x) => x.toLowerCase() !== state.lastEnrollmentMethod
-      );
-
       if ((state.selectedSetupMethod || "").toLowerCase() === state.lastEnrollmentMethod.toLowerCase()) {
         state.selectedSetupMethod = null;
       }
     }
+
+    await loadDevicesAvailable();
 
     persistState();
     render();
@@ -805,30 +818,26 @@
 
     state.pendingFido2EnrollOptions = null;
     state.pendingFido2EnrollTransactionId = null;
-    state.availableMfaSetupOptions = (state.availableMfaSetupOptions || []).filter(
-      (x) => x.toLowerCase() !== "fido2"
-    );
     if ((state.selectedSetupMethod || "").toLowerCase() === "fido2") {
       state.selectedSetupMethod = null;
     }
+
+    await loadDevicesAvailable();
 
     persistState();
     render();
     focusCard(refs.setupMfaCard.hidden ? refs.loginCard : refs.setupMfaCard);
   }
 
-  function hydrateAuthenticatedSession(data) {
+  async function hydrateAuthenticatedSession(data) {
     state.accessToken = data.accessToken || null;
     state.refreshToken = data.refreshToken || null;
     state.mfaToken = null;
     state.mfaTransactionId = null;
-    state.allowedMfaMethods = [];
+    state.allowedMfaMethods = data.allowedMfaMethods || [];
+    await loadDevicesAvailable();
     state.selectedVerifyMethod = null;
     state.selectedSetupMethod = null;
-
-    if (Array.isArray(data.availableMfaSetupOptions)) {
-      state.availableMfaSetupOptions = data.availableMfaSetupOptions;
-    }
 
     persistState();
     render();

@@ -10,7 +10,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 2. Run login and handle two results:
    - fully authenticated (`Authenticated`)
    - MFA required (`RequiresMfa`)
-3. When login returns `Authenticated` and `AvailableMfaSetupOptions` contains values, show an MFA setup screen with 3 options:
+3. When login returns `Authenticated`, derive missing setup methods from `AllowedMfaMethods` and show the MFA setup screen only for missing options.
    - sms
    - email
    - fido2 passwordless
@@ -51,7 +51,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
    - CTA per method: `Use SMS`, `Use Email`, `Use FIDO2`
    - after selection, only the chosen verification flow remains visible
 4. MFA setup screen for authenticated users without configured MFA:
-   - activated when `AvailableMfaSetupOptions` has values
+   - activated when there are missing options derived from `AllowedMfaMethods`
    - shows three cards: `Setup SMS`, `Setup Email`, `Setup FIDO2 Passwordless`
    - uses full token to start enrollment
    - after selection, only the chosen enrollment flow remains visible
@@ -75,7 +75,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
    - global session state
    - HTTP client (fetch)
    - endpoint -> required token mapping
-   - `AllowedMfaMethods`/`AvailableMfaSetupOptions` -> UI screen/action mapping
+   - `AllowedMfaMethods` -> UI screen/action mapping
    - state-driven card visibility (selected flow only)
    - endpoint hints per selected method
    - response box rendering
@@ -100,7 +100,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 
 1. Create user (`POST /api/users`).
 2. Login (`POST /api/auth/login`).
-3. If `Authenticated` and `AvailableMfaSetupOptions` has values:
+3. If `Authenticated` and there are missing methods based on `AllowedMfaMethods`:
    - show MFA setup screen with `sms`, `email`, `fido2`
    - after selection, show only the selected enrollment flow
    - show endpoints for the selected enrollment method
@@ -143,7 +143,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 ## Implementation Phases
 
 1. Phase 1: Base UI shell + response console + session state.
-2. Phase 2: User registration + login + token persistence + `AllowedMfaMethods`/`AvailableMfaSetupOptions` storage.
+2. Phase 2: User registration + login + token persistence + `AllowedMfaMethods` storage.
 3. Phase 3: MFA setup screen for authenticated users with available setup options.
 4. Phase 4: Method/device selection screen for `RequiresMfa`.
 5. Phase 5: MFA challenge flow.

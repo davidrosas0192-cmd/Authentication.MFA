@@ -217,7 +217,7 @@ public class AuthService : IAuthService
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
                 ExpiresIn = 15 * 60,
-                AvailableMfaSetupOptions = await _mfaService.GetAvailableSetupMethodsAsync(user.Id, cancellationToken),
+                AllowedMfaMethods = allowedMfaMethods,
             },
             "Authentication succeeded."
         );

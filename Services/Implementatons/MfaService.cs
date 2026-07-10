@@ -52,6 +52,7 @@ public class MfaService : IMfaService
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            Purpose = MfaChallengePurposes.Login,
             Status = MfaChallengeStatuses.PendingSelection,
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
             IpAddress = ipAddress,
@@ -80,6 +81,14 @@ public class MfaService : IMfaService
         {
             return Result<StartMfaChallengeResponse>.Failure(
                 "Invalid or expired MFA transaction.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (challenge.Purpose != MfaChallengePurposes.Login)
+        {
+            return Result<StartMfaChallengeResponse>.Failure(
+                "Invalid MFA transaction purpose.",
                 StatusCodes.Status400BadRequest
             );
         }
@@ -117,6 +126,7 @@ public class MfaService : IMfaService
         challenge.Provider = "twilio";
         challenge.ProviderRequestId = providerSid;
         challenge.Channel = normalizedMethod;
+        challenge.ContactValue = method.ContactValue;
         challenge.Status = MfaChallengeStatuses.Pending;
         challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5);
         challenge.IpAddress = ipAddress ?? challenge.IpAddress;
@@ -164,6 +174,14 @@ public class MfaService : IMfaService
             );
         }
 
+        if (challenge.Purpose != MfaChallengePurposes.Login)
+        {
+            return Result<LoginResponse>.Failure(
+                "Invalid MFA challenge purpose.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
         if (challenge.Status != MfaChallengeStatuses.Pending)
         {
             return Result<LoginResponse>.Failure(
@@ -195,7 +213,7 @@ public class MfaService : IMfaService
         }
 
         var isApproved = await _twilioOtpService.CheckVerificationAsync(
-            method.ContactValue,
+            challenge.ContactValue ?? method.ContactValue,
             request.Code,
             cancellationToken
         );
@@ -252,6 +270,202 @@ public class MfaService : IMfaService
                 ExpiresIn = 15 * 60,
             },
             "MFA verification succeeded."
+        );
+    }
+
+    public async Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentAsync(
+        long userId,
+        StartMfaEnrollmentRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        var normalizedMethod = request.Method.Trim().ToLowerInvariant();
+        if (normalizedMethod != MfaMethodTypes.Sms && normalizedMethod != MfaMethodTypes.Email)
+        {
+            return Result<StartMfaEnrollmentResponse>.Failure(
+                "Only sms and email enrollment are supported in this endpoint.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        var contact = request.ContactValue.Trim();
+        if (string.IsNullOrWhiteSpace(contact))
+        {
+            return Result<StartMfaEnrollmentResponse>.Failure(
+                "Contact value is required.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        var providerSid = await _twilioOtpService.StartVerificationAsync(
+            contact,
+            normalizedMethod,
+            cancellationToken
+        );
+
+        var challenge = new MfaChallenge
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Purpose = MfaChallengePurposes.Enrollment,
+            Method = normalizedMethod,
+            Provider = "twilio",
+            ProviderRequestId = providerSid,
+            Channel = normalizedMethod,
+            ContactValue = contact,
+            Status = MfaChallengeStatuses.Pending,
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            CreatedAtUtc = DateTime.UtcNow,
+        };
+
+        await _mfaChallengeRepository.AddAsync(challenge, cancellationToken);
+
+        await _auditService.TrackAuthenticationEventAsync(
+            userId,
+            null,
+            "mfa_enrollment_start",
+            normalizedMethod,
+            true,
+            null,
+            cancellationToken
+        );
+
+        return Result<StartMfaEnrollmentResponse>.Success(
+            new StartMfaEnrollmentResponse
+            {
+                EnrollmentTransactionId = challenge.Id,
+                Method = normalizedMethod,
+                Status = challenge.Status,
+                ExpiresAtUtc = challenge.ExpiresAtUtc,
+            },
+            "MFA enrollment challenge started."
+        );
+    }
+
+    public async Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentAsync(
+        long userId,
+        VerifyMfaEnrollmentRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var challenge = await _mfaChallengeRepository.GetByIdAsync(
+            request.EnrollmentTransactionId,
+            cancellationToken
+        );
+
+        if (challenge is null || challenge.UserId != userId || challenge.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            return Result<VerifyMfaEnrollmentResponse>.Failure(
+                "Invalid or expired enrollment challenge.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (challenge.Purpose != MfaChallengePurposes.Enrollment)
+        {
+            return Result<VerifyMfaEnrollmentResponse>.Failure(
+                "Invalid challenge purpose for enrollment.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (challenge.Status != MfaChallengeStatuses.Pending)
+        {
+            return Result<VerifyMfaEnrollmentResponse>.Failure(
+                "Enrollment challenge is not in a verifiable state.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (string.IsNullOrWhiteSpace(challenge.Method) || string.IsNullOrWhiteSpace(challenge.ContactValue))
+        {
+            return Result<VerifyMfaEnrollmentResponse>.Failure(
+                "Enrollment challenge is missing required data.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        var isApproved = await _twilioOtpService.CheckVerificationAsync(
+            challenge.ContactValue,
+            request.Code,
+            cancellationToken
+        );
+
+        if (!isApproved)
+        {
+            challenge.Status = MfaChallengeStatuses.Failed;
+            await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+            await _auditService.TrackAuthenticationEventAsync(
+                userId,
+                null,
+                "mfa_enrollment_verify",
+                challenge.Method,
+                false,
+                "Invalid OTP",
+                cancellationToken
+            );
+
+            return Result<VerifyMfaEnrollmentResponse>.Failure(
+                "Invalid OTP code.",
+                StatusCodes.Status401Unauthorized
+            );
+        }
+
+        var existing = await _mfaMethodRepository.GetByUserIdAndMethodAsync(
+            userId,
+            challenge.Method,
+            cancellationToken
+        );
+
+        if (existing is null)
+        {
+            await _mfaMethodRepository.AddAsync(
+                new UserMfaMethod
+                {
+                    UserId = userId,
+                    Method = challenge.Method,
+                    IsEnabled = true,
+                    IsPrimary = false,
+                    IsVerified = true,
+                    ContactValue = challenge.ContactValue,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    UpdatedAtUtc = DateTime.UtcNow,
+                },
+                cancellationToken
+            );
+        }
+        else
+        {
+            existing.IsEnabled = true;
+            existing.IsVerified = true;
+            existing.ContactValue = challenge.ContactValue;
+            existing.UpdatedAtUtc = DateTime.UtcNow;
+
+            await _mfaMethodRepository.UpdateAsync(existing, cancellationToken);
+        }
+
+        challenge.Status = MfaChallengeStatuses.Verified;
+        challenge.VerifiedAtUtc = DateTime.UtcNow;
+        await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+        await _auditService.TrackAuthenticationEventAsync(
+            userId,
+            null,
+            "mfa_enrollment_verify",
+            challenge.Method,
+            true,
+            null,
+            cancellationToken
+        );
+
+        return Result<VerifyMfaEnrollmentResponse>.Success(
+            new VerifyMfaEnrollmentResponse { Method = challenge.Method, IsVerified = true },
+            "MFA method enrollment verified."
         );
     }
 }

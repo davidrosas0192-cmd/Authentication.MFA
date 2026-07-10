@@ -32,4 +32,28 @@ public class UserMfaMethodRepository : IUserMfaMethodRepository
             cancellationToken
         );
     }
+
+    public Task<UserMfaMethod?> GetByUserIdAndMethodAsync(
+        long userId,
+        string method,
+        CancellationToken cancellationToken
+    )
+    {
+        return _context.UserMfaMethods.FirstOrDefaultAsync(
+            x => x.UserId == userId && x.Method == method,
+            cancellationToken
+        );
+    }
+
+    public async Task AddAsync(UserMfaMethod method, CancellationToken cancellationToken)
+    {
+        await _context.UserMfaMethods.AddAsync(method, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdateAsync(UserMfaMethod method, CancellationToken cancellationToken)
+    {
+        _context.UserMfaMethods.Update(method);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
 }

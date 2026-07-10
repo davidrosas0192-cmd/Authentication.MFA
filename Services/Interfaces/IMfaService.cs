@@ -17,6 +17,18 @@ public interface IMfaService
         VerifyMfaChallengeRequest request,
         CancellationToken cancellationToken
     );
+    Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentAsync(
+        long userId,
+        StartMfaEnrollmentRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    );
+    Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentAsync(
+        long userId,
+        VerifyMfaEnrollmentRequest request,
+        CancellationToken cancellationToken
+    );
     Task<Guid> CreateSelectionChallengeAsync(
         long userId,
         string? ipAddress,

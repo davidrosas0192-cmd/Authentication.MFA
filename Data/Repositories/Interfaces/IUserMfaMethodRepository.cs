@@ -10,4 +10,11 @@ public interface IUserMfaMethodRepository
         string method,
         CancellationToken cancellationToken
     );
+    Task<UserMfaMethod?> GetByUserIdAndMethodAsync(
+        long userId,
+        string method,
+        CancellationToken cancellationToken
+    );
+    Task AddAsync(UserMfaMethod method, CancellationToken cancellationToken);
+    Task UpdateAsync(UserMfaMethod method, CancellationToken cancellationToken);
 }

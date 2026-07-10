@@ -97,6 +97,14 @@ Security notes:
 - Input: challengeId + OTP code (for sms/email) or fido2 payload.
 - Output: authenticated tokens if successful.
 
+4. POST /api/mfa/enrollment/start
+- Input: method (sms or email) + contact value.
+- Output: enrollment transaction metadata and expiration.
+
+5. POST /api/mfa/enrollment/verify
+- Input: enrollmentTransactionId + OTP code.
+- Output: method verified and enabled for user.
+
 ### Login Flow Update
 - After password validation, fetch enabled methods from UserMfaMethods.
 - If no enabled method: issue tokens directly.
@@ -190,5 +198,20 @@ Test cases:
 - A user can enable any combination of sms/email/fido2.
 - Login returns available MFA methods when MFA is required.
 - SMS and Email OTP flows work through Twilio Verify.
+- SMS and Email enrollment endpoints complete verification and persist UserMfaMethod state.
 - Audit logs capture MFA enrollment and challenge lifecycle.
 - Production logging remains error-focused while security audit persists.
+
+## Implementation Status (Current)
+- Implemented schema:
+  - UserMfaMethods
+  - MfaChallenges (including Purpose and ContactValue)
+- Implemented login response contract:
+  - AllowedMfaMethods + MfaTransactionId when MFA required
+- Implemented Twilio OTP challenge endpoints for login:
+  - /api/mfa/challenges/start
+  - /api/mfa/challenges/verify
+- Implemented enrollment endpoints for sms/email:
+  - /api/mfa/enrollment/start
+  - /api/mfa/enrollment/verify
+- Existing FIDO2 enrollment/login flows remain active in Fido2Controller

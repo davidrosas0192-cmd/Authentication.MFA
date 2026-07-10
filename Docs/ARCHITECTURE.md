@@ -29,29 +29,22 @@ The controllers expose HTTP endpoints for:
 - Authentication
 - FIDO2 enrollment
 - FIDO2 login
-
-Key files:
-
+- MFA methods and challenge orchestration
 - Controllers/AuthController.cs
 - Controllers/Fido2Controller.cs
 
-### 2. Application layer
-
+- Controllers/MfaController.cs
 The service layer contains business rules and orchestrates operations such as:
 
 - user login validation
 - FIDO2 challenge generation
 - FIDO2 attestation/assertion handling
-- token creation
-
-Key files:
-
+- MFA method resolution and login challenge orchestration
+- SMS/Email OTP enrollment and verification via Twilio Verify
 - Services/Implementatons/AuthService.cs
 - Services/Implementatons/Fido2MfaService.cs
 - Services/Implementatons/TokenService.cs
-
-### 3. Data access layer
-
+- Services/Implementatons/MfaService.cs
 Repositories abstract data access from the services and interact with Entity Framework Core.
 
 Key responsibilities:
@@ -59,9 +52,6 @@ Key responsibilities:
 - load users by username, email, or ID
 - store and update FIDO2 credentials
 - manage FIDO2 transaction state
-
-### 4. Persistence layer
-
 Entity Framework Core is configured in the application startup and uses SQL Server.
 
 Key files:
@@ -69,20 +59,15 @@ Key files:
 - Data/ApplicationDbContext.cs
 - Data/Configurations/*.cs
 - Migrations/
-
-### 5. Observability and audit layer
-
 The system uses two complementary logging paths:
 
 - Application diagnostics logging:
     - Uses ILogger with Serilog sink to SQL Server.
     - Stores request and application logs in a secondary database table dbo.ApplicationLogs.
-    - Environment-based level policy: Development verbose, Production errors only.
 
 - Security and authentication auditing:
     - Uses explicit EF entities and writes through IAuditService.
     - Stores domain-level audit events in AuthenticationAuditEvents and SecurityAuditEvents.
-    - Designed for pentesting evidence and security investigations.
 
 ## Domain entities
 
@@ -97,15 +82,19 @@ Stores the WebAuthn credential details for a user, including:
 - credential ID
 - public key
 - signature counter
-- user handle
-
-### Fido2Transaction
-
 Tracks temporary FIDO2 registration and login challenges, including expiry and usage state.
 
 ## Result pattern
 
 A shared Result wrapper sits between the service layer and the API layer. This keeps business logic explicit and makes it easier to return both domain data and HTTP-oriented outcomes without scattering error handling across controllers.
+
+### UserMfaMethod
+
+Stores available MFA methods for each user (sms, email, fido2), verification state, and contact value for OTP methods.
+
+### MfaChallenge
+
+Stores MFA login/enrollment challenge transactions and provider metadata (purpose, method, status, expiration).
 
 Response payload generation is centralized in Common/Result.cs so controllers produce a consistent API envelope:
 
@@ -113,14 +102,9 @@ Response payload generation is centralized in Common/Result.cs so controllers pr
 - Failure payload includes success and message.
 
 The pattern is used for:
-
-- authentication outcomes
 - FIDO2 enrollment and login flows
 - validation failures and authorization errors
 
-## Authentication flow
-
-### Standard login
 
 1. The client sends credentials to the auth endpoint.
 2. The auth service validates the user.
@@ -128,8 +112,9 @@ The pattern is used for:
 4. If MFA is enabled, the API returns a response requiring FIDO2 verification.
 
 ### FIDO2 enrollment
-
-1. The client requests enrollment options from the protected endpoint.
+3. If MFA is disabled, the API returns JWT tokens.
+4. If MFA is enabled, the API returns AllowedMfaMethods and MfaTransactionId.
+5. Client continues with OTP challenge endpoints for sms/email or FIDO2 endpoints for fido2.
 2. The service creates a WebAuthn challenge and stores it in a transaction record.
 3. The client completes attestation with the authenticator.
 4. The service validates the response and stores the credential.
@@ -147,6 +132,10 @@ Application services are registered in the service collection extension:
 
 - Extensions/ServiceCollectionExtensions.cs
 
+1. Authenticated user starts enrollment with method and contact value.
+2. The service creates an enrollment challenge and calls Twilio Verify.
+3. The user submits OTP code for verification.
+4. The service upserts UserMfaMethod as enabled and verified.
 Current DI setup includes:
 
 - Auth and token services

@@ -88,6 +88,68 @@ public class MfaController : ControllerBase
         }
     }
 
+    [Authorize]
+    [HttpPost("enrollment/start")]
+    public async Task<IActionResult> StartEnrollment(
+        [FromBody] StartMfaEnrollmentRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var userIdValue = User.FindFirst("sub")?.Value;
+            if (string.IsNullOrWhiteSpace(userIdValue) || !long.TryParse(userIdValue, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.StartEnrollmentAsync(
+                userId,
+                request,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred starting MFA enrollment.");
+            return Problem("An error occurred while starting MFA enrollment.");
+        }
+    }
+
+    [Authorize]
+    [HttpPost("enrollment/verify")]
+    public async Task<IActionResult> VerifyEnrollment(
+        [FromBody] VerifyMfaEnrollmentRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var userIdValue = User.FindFirst("sub")?.Value;
+            if (string.IsNullOrWhiteSpace(userIdValue) || !long.TryParse(userIdValue, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.VerifyEnrollmentAsync(
+                userId,
+                request,
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred verifying MFA enrollment.");
+            return Problem("An error occurred while verifying MFA enrollment.");
+        }
+    }
+
     private IActionResult ToActionResult<T>(Result<T> result)
     {
         var payload = result.ToResponsePayload();

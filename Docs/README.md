@@ -7,6 +7,7 @@ This project is an ASP.NET Core Web API that provides authentication using tradi
 - Authenticates users with username/email and password
 - Supports FIDO2 enrollment for passkey-based MFA
 - Supports FIDO2 login assertions for passwordless MFA
+- Supports Twilio Verify OTP enrollment and verification for SMS and Email MFA methods
 - Issues JWT access and refresh tokens
 - Stores user, credential, and transaction data in SQL Server using Entity Framework Core
 - Stores OWASP-aligned security audit events for authentication flows
@@ -46,6 +47,7 @@ Update the connection string and secrets in appsettings.json or environment-spec
 - JWT settings: Jwt
 - MFA JWT settings: MfaJwt
 - FIDO2 settings: Fido2
+- Twilio settings: Twilio
 
 ### Run locally
 
@@ -131,8 +133,17 @@ If those files were previously tracked, they must be removed from index once wit
 ### Login
 
 1. Send a login request to the auth endpoint
-2. If MFA is enabled, the API returns a response that requires FIDO2 verification
-3. Complete the FIDO2 challenge with the browser or client SDK
+2. If MFA is required, the API returns AllowedMfaMethods and a MfaTransactionId
+3. Start challenge for sms/email using api/mfa/challenges/start and verify with api/mfa/challenges/verify
+4. For fido2, continue with the existing FIDO2 login flow
+
+### SMS/Email enrollment (Twilio Verify)
+
+1. Authenticate with JWT
+2. Start enrollment with api/mfa/enrollment/start and method/contact value
+3. Receive OTP via selected channel (sms or email)
+4. Verify enrollment with api/mfa/enrollment/verify
+5. The method becomes enabled and verified for the user
 
 ### FIDO2 enrollment
 
@@ -160,3 +171,4 @@ If those files were previously tracked, they must be removed from index once wit
 - [OWASP Audit Plan](./OWASP_AUDIT_PLAN.md)
 - [Logging Database Migration](./LOGGING_DATABASE_MIGRATION.md)
 - [Twilio MFA Implementation Plan](./TWILIO_MFA_IMPLEMENTATION_PLAN.md)
+- [MFA Enrollment Guide](./MFA_ENROLLMENT_GUIDE.md)

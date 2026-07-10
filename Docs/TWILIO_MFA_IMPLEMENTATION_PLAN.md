@@ -111,6 +111,7 @@ Security notes:
 - If methods exist:
   - Return RequiresMfa = true
   - Return AllowedMfaMethods array in LoginResponse
+  - Return MfaToken (temporary token) and MfaTransactionId
   - Client chooses method and starts challenge
 
 This is the primary place where allowed methods are returned.
@@ -118,6 +119,7 @@ This is the primary place where allowed methods are returned.
 ## DTO Changes
 Update LoginResponse:
 - Add AllowedMfaMethods: string[]
+- Add MfaToken and MfaExpiresIn for MFA stage
 - Keep MfaRequired and MfaTransactionId (or rename to ChallengeId for consistency)
 
 Add DTOs:
@@ -176,6 +178,7 @@ Phase 4: Cutover
 - Prevent duplicate enabled rows for same method/user.
 - Enforce OTP attempt limits and challenge expiry.
 - Internal updates to IsEnabled must prevent unsafe lockout states (policy-based).
+- Enforce MFA token on login challenge endpoints and reject full access token.
 
 ## Penetration Testing Readiness
 Test cases:
@@ -207,10 +210,13 @@ Test cases:
   - UserMfaMethods
   - MfaChallenges (including Purpose and ContactValue)
 - Implemented login response contract:
-  - AllowedMfaMethods + MfaTransactionId when MFA required
+  - AllowedMfaMethods + MfaTransactionId + MfaToken when MFA required
 - Implemented Twilio OTP challenge endpoints for login:
   - /api/mfa/challenges/start
   - /api/mfa/challenges/verify
+- Implemented MFA-token enforcement for login challenge endpoints:
+  - Requires MfaBearer scheme
+  - Validates token_type = mfa and mfa_tx claim binding
 - Implemented enrollment endpoints for sms/email:
   - /api/mfa/enrollment/start
   - /api/mfa/enrollment/verify

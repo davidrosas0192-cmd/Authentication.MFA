@@ -35,13 +35,13 @@ All controller responses follow this shape:
 ## Endpoint Index
 
 1. POST /api/auth/login
-2. GET /api/mfa/methods (Authorize)
-3. POST /api/mfa/enrollment/start (Authorize)
-4. POST /api/mfa/enrollment/verify (Authorize)
-5. POST /api/mfa/challenges/start
-6. POST /api/mfa/challenges/verify
-7. POST /api/fido2/enrollment/options (Authorize)
-8. POST /api/fido2/enrollment/complete (Authorize)
+2. GET /api/mfa/methods (Authorize: access token)
+3. POST /api/mfa/enrollment/start (Authorize: access token)
+4. POST /api/mfa/enrollment/verify (Authorize: access token)
+5. POST /api/mfa/challenges/start (Authorize: mfa token)
+6. POST /api/mfa/challenges/verify (Authorize: mfa token)
+7. POST /api/fido2/enrollment/options (Authorize: access token)
+8. POST /api/fido2/enrollment/complete (Authorize: access token)
 9. POST /api/fido2/login/options
 10. POST /api/fido2/login/complete
 
@@ -309,6 +309,10 @@ Note:
 - POST /api/auth/login -> RequiresMfa + includes fido2
 - POST /api/fido2/login/options
 - POST /api/fido2/login/complete -> tokens
+
+Note:
+- Current FIDO2 login endpoints are transaction-based and do not yet enforce MfaToken.
+- SMS/Email MFA challenge endpoints enforce MfaToken.
 
 4. User enrolls new SMS/Email method:
 - POST /api/mfa/enrollment/start (Authorize)

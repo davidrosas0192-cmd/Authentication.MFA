@@ -133,9 +133,10 @@ If those files were previously tracked, they must be removed from index once wit
 ### Login
 
 1. Send a login request to the auth endpoint
-2. If MFA is required, the API returns AllowedMfaMethods and a MfaTransactionId
-3. Start challenge for sms/email using api/mfa/challenges/start and verify with api/mfa/challenges/verify
-4. For fido2, continue with the existing FIDO2 login flow
+2. If MFA is required, the API returns AllowedMfaMethods, MfaTransactionId, and MfaToken
+3. For sms/email, use MfaToken with api/mfa/challenges/start and api/mfa/challenges/verify
+4. Full access token is issued only after successful MFA verification
+5. If MFA is not required, a full access token is issued directly by login
 
 ### SMS/Email enrollment (Twilio Verify)
 
@@ -157,6 +158,19 @@ If those files were previously tracked, they must be removed from index once wit
 1. Request login options using username or email
 2. Complete assertion with the authenticator
 3. Receive JWT tokens after successful verification
+
+## Token rules
+
+- Full access token:
+	- Issued when MFA is not required, or after MFA verification succeeds
+	- Used for standard protected endpoints and enrollment endpoints
+
+- MFA token:
+	- Issued only when login returns RequiresMfa
+	- Used for MFA login challenge endpoints:
+		- /api/mfa/challenges/start
+		- /api/mfa/challenges/verify
+	- Full access token is rejected on these endpoints
 
 ## Security notes
 

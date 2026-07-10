@@ -79,9 +79,22 @@ After password validation:
   - MfaRequired = true
   - AllowedMfaMethods
   - MfaTransactionId
+  - MfaToken
 - Client chooses method:
-  - sms/email: use /api/mfa/challenges/start and /api/mfa/challenges/verify
+  - sms/email: use /api/mfa/challenges/start and /api/mfa/challenges/verify with MfaToken
   - fido2: continue with FIDO2 login endpoints
+
+## Token requirements
+
+- Enrollment endpoints require full access token (Bearer access token):
+  - /api/mfa/enrollment/start
+  - /api/mfa/enrollment/verify
+
+- Login challenge endpoints require MFA token (Bearer mfa token):
+  - /api/mfa/challenges/start
+  - /api/mfa/challenges/verify
+
+- Full access token is issued after MFA verification succeeds.
 
 ## Required configuration
 

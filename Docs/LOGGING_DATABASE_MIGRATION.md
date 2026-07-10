@@ -4,6 +4,7 @@
 This project uses a secondary SQL Server database dedicated to application logs.
 
 - Application database: `AuthenticationFido2`
+- Application database: `AuthenticationFido2Mfa`
 - Logging database: `AuthenticationFido2Logs`
 
 ## How logging DB creation works

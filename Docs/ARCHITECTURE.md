@@ -4,160 +4,167 @@ This document describes the high-level design of the Authentication Fido2 API.
 
 ## Overview
 
-The application follows a layered architecture with clear separation between API endpoints, service logic, repositories, and persistence.
+The API uses a layered architecture with controllers, services, repositories, and SQL Server persistence.
 
 ```mermaid
 flowchart LR
-    Client[Client / Browser] --> Controller[Controllers]
-    Controller --> Service[Services]
-    Service --> Repo[Repositories]
-    Repo --> Db[(Primary SQL Server DB)]
-    Service --> Fido2[FIDO2/WebAuthn Library]
-    Service --> Token[JWT Token Service]
-    Service --> AuditSvc[Audit Service]
-    AuditSvc --> AuditDb[(Primary SQL Server DB Audit Tables)]
-    Controller --> Logger[ILogger / Serilog]
-    Logger --> LogDb[(Secondary SQL Server Logging DB)]
+    Client[Client / Browser] --> AuthController[AuthController]
+    Client --> MfaController[MfaController]
+    Client --> Fido2Controller[Fido2Controller]
+
+    AuthController --> AuthService[AuthService]
+    MfaController --> MfaService[MfaService]
+    Fido2Controller --> Fido2MfaService[Fido2MfaService]
+
+    AuthService --> TokenService[TokenService]
+    MfaService --> TokenService
+    MfaService --> TwilioService[TwilioOtpService]
+    Fido2MfaService --> Fido2Lib[Fido2/WebAuthn Library]
+
+    AuthService --> Repos[Repositories]
+    MfaService --> Repos
+    Fido2MfaService --> Repos
+    Repos --> PrimaryDb[(Primary SQL Server DB)]
+
+    AuthService --> AuditSvc[AuditService]
+    MfaService --> AuditSvc
+    Fido2MfaService --> AuditSvc
+    AuditSvc --> PrimaryDb
+
+    Controllers[Controllers] --> Serilog[ILogger/Serilog]
+    Serilog --> LogDb[(Secondary SQL Logging DB)]
 ```
 
 ## Layers
 
-### 1. Presentation layer
+## 1. Presentation layer
 
-The controllers expose HTTP endpoints for:
+Controllers expose HTTP endpoints for:
 
-- Authentication
+- password login
+- MFA methods and challenge orchestration
+- SMS/Email enrollment
 - FIDO2 enrollment
 - FIDO2 login
-- MFA methods and challenge orchestration
+
+Key files:
+
 - Controllers/AuthController.cs
+- Controllers/MfaController.cs
 - Controllers/Fido2Controller.cs
 
-- Controllers/MfaController.cs
-The service layer contains business rules and orchestrates operations such as:
+## 2. Application layer
 
-- user login validation
-- FIDO2 challenge generation
-- FIDO2 attestation/assertion handling
-- MFA method resolution and login challenge orchestration
-- SMS/Email OTP enrollment and verification via Twilio Verify
+Services implement business workflows:
+
+- AuthService: password validation and MFA-gated login decisions
+- MfaService: MFA method resolution, OTP challenge start/verify, enrollment start/verify
+- Fido2MfaService: WebAuthn registration and assertion workflows
+- TokenService: full access token, refresh token, and temporary MFA token issuance
+- TwilioOtpService: Twilio Verify integration for sms/email OTP
+
+Key files:
+
 - Services/Implementatons/AuthService.cs
+- Services/Implementatons/MfaService.cs
 - Services/Implementatons/Fido2MfaService.cs
 - Services/Implementatons/TokenService.cs
-- Services/Implementatons/MfaService.cs
-Repositories abstract data access from the services and interact with Entity Framework Core.
+- Services/Implementatons/TwilioOtpService.cs
+
+## 3. Data access layer
+
+Repositories abstract EF Core access for users, credentials, transactions, methods, and challenges.
 
 Key responsibilities:
 
-- load users by username, email, or ID
-- store and update FIDO2 credentials
-- manage FIDO2 transaction state
-Entity Framework Core is configured in the application startup and uses SQL Server.
+- user lookup and updates
+- FIDO2 credential persistence
+- FIDO2 transaction persistence
+- MFA method registry access
+- MFA challenge lifecycle persistence
+
+## 4. Persistence layer
+
+EF Core maps entities and migrations to SQL Server.
 
 Key files:
 
 - Data/ApplicationDbContext.cs
 - Data/Configurations/*.cs
 - Migrations/
-The system uses two complementary logging paths:
+
+## 5. Observability and audit layer
+
+Two logging paths are implemented:
 
 - Application diagnostics logging:
-    - Uses ILogger with Serilog sink to SQL Server.
-    - Stores request and application logs in a secondary database table dbo.ApplicationLogs.
+  - ILogger + Serilog sink to secondary SQL logging DB
+  - Table: dbo.ApplicationLogs
+  - Dev: verbose, Prod: errors only
 
-- Security and authentication auditing:
-    - Uses explicit EF entities and writes through IAuditService.
-    - Stores domain-level audit events in AuthenticationAuditEvents and SecurityAuditEvents.
+- Security/authentication auditing:
+  - Explicit audit records through AuditService
+  - Tables: AuthenticationAuditEvents, SecurityAuditEvents
 
 ## Domain entities
 
-### User
+- User: account identity and status
+- UserFido2Credential: stored WebAuthn credentials
+- Fido2Transaction: FIDO2 challenge transactions
+- UserMfaMethod: per-user MFA methods and verification state
+- MfaChallenge: MFA login/enrollment challenge lifecycle
+- AuthenticationAuditEvent / SecurityAuditEvent: audit trails
 
-Represents an application user with authentication state and MFA configuration.
+## Token model
 
-### UserFido2Credential
+- Full access token:
+  - Used for authenticated API operations
+  - Issued when MFA is not required or after MFA completes
 
-Stores the WebAuthn credential details for a user, including:
+- MFA token:
+  - Temporary token issued only when login requires MFA
+  - Bound to mfa transaction claim and validated on MFA challenge endpoints
 
-- credential ID
-- public key
-- signature counter
-Tracks temporary FIDO2 registration and login challenges, including expiry and usage state.
+## Authentication flows
 
-## Result pattern
+## Standard login
 
-A shared Result wrapper sits between the service layer and the API layer. This keeps business logic explicit and makes it easier to return both domain data and HTTP-oriented outcomes without scattering error handling across controllers.
+1. Client calls /api/auth/login with username/password.
+2. If no MFA methods are enabled, full access token is returned.
+3. If MFA is required, response includes:
+   - AllowedMfaMethods
+   - MfaTransactionId
+   - MfaToken
+4. Client completes MFA to receive full access token.
 
-### UserMfaMethod
+## SMS/Email enrollment
 
-Stores available MFA methods for each user (sms, email, fido2), verification state, and contact value for OTP methods.
+1. Authenticated user starts enrollment (/api/mfa/enrollment/start).
+2. Service creates enrollment challenge and sends OTP via Twilio Verify.
+3. User verifies OTP (/api/mfa/enrollment/verify).
+4. UserMfaMethod is inserted/updated as enabled and verified.
 
-### MfaChallenge
+## SMS/Email MFA login challenge
 
-Stores MFA login/enrollment challenge transactions and provider metadata (purpose, method, status, expiration).
+1. Client starts challenge with MFA token (/api/mfa/challenges/start).
+2. Client verifies OTP with MFA token (/api/mfa/challenges/verify).
+3. Service returns full access token on success.
 
-Response payload generation is centralized in Common/Result.cs so controllers produce a consistent API envelope:
+## FIDO2 enrollment/login
 
-- Success payload includes success, message, and data.
-- Failure payload includes success and message.
+FIDO2 flows remain available through Fido2Controller and Fido2MfaService.
 
-The pattern is used for:
-- FIDO2 enrollment and login flows
-- validation failures and authorization errors
+## Configuration sections
 
-
-1. The client sends credentials to the auth endpoint.
-2. The auth service validates the user.
-3. If MFA is disabled, the API returns JWT tokens.
-4. If MFA is enabled, the API returns a response requiring FIDO2 verification.
-
-### FIDO2 enrollment
-3. If MFA is disabled, the API returns JWT tokens.
-4. If MFA is enabled, the API returns AllowedMfaMethods and MfaTransactionId.
-5. Client continues with OTP challenge endpoints for sms/email or FIDO2 endpoints for fido2.
-2. The service creates a WebAuthn challenge and stores it in a transaction record.
-3. The client completes attestation with the authenticator.
-4. The service validates the response and stores the credential.
-
-### FIDO2 login
-
-1. The client submits a username or email to begin login.
-2. The service creates an assertion challenge.
-3. The authenticator signs the challenge.
-4. The service validates the signature and returns JWT tokens.
-
-## Dependency injection
-
-Application services are registered in the service collection extension:
-
-- Extensions/ServiceCollectionExtensions.cs
-
-1. Authenticated user starts enrollment with method and contact value.
-2. The service creates an enrollment challenge and calls Twilio Verify.
-3. The user submits OTP code for verification.
-4. The service upserts UserMfaMethod as enabled and verified.
-Current DI setup includes:
-
-- Auth and token services
-- FIDO2 service
-- Audit service
-- User, credential, and transaction repositories
-- HttpContext accessor for request metadata enrichment in auditing
-
-This keeps startup wiring centralized and makes the application easier to extend.
-
-## Configuration concerns
-
-The application uses configuration sections for:
-
-- database connection string
-- logging database connection string
-- JWT authentication
-- MFA JWT settings
-- FIDO2 server settings
+- ConnectionStrings: DefaultConnection, LoggingConnection
+- Jwt
+- MfaJwt
+- Fido2
+- Twilio
 
 ## Design notes
 
-- The API is intentionally simple and focused on authentication rather than a large domain model.
-- FIDO2 transactions are persisted so challenges can be validated safely over multiple steps.
-- Controllers remain thin and delegate business flow to services.
+- Controllers are thin and delegate to services.
+- MFA method combinations are modeled in UserMfaMethods.
+- MFA challenge state is explicit and auditable.
+- Result wrapper provides a consistent API response envelope.

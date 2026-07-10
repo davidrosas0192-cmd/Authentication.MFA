@@ -45,6 +45,8 @@ WHERE TABLE_NAME = 'ApplicationLogs';
 ## Notes
 - This logging database is intentionally separate from business/auth data.
 - No EF migration is required for log table creation because Serilog sink handles it automatically.
+- Logging setup is implemented in Extensions/LoggingExtensions.cs and initialized from Program.cs.
+- EF migrations still apply to the primary database (including OWASP audit tables).
 
 ## Execution Status
 Executed on 2026-07-09:

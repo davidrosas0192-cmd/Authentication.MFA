@@ -9,6 +9,8 @@ This project is an ASP.NET Core Web API that provides authentication using tradi
 - Supports FIDO2 login assertions for passwordless MFA
 - Issues JWT access and refresh tokens
 - Stores user, credential, and transaction data in SQL Server using Entity Framework Core
+- Stores OWASP-aligned security audit events for authentication flows
+- Writes infrastructure logs to a dedicated secondary SQL Server logging database
 
 ## Tech stack
 
@@ -40,6 +42,7 @@ This project is an ASP.NET Core Web API that provides authentication using tradi
 Update the connection string and secrets in appsettings.json or environment-specific settings:
 
 - Connection string: DefaultConnection
+- Logging connection string: LoggingConnection
 - JWT settings: Jwt
 - MFA JWT settings: MfaJwt
 - FIDO2 settings: Fido2
@@ -51,6 +54,11 @@ dotnet restore
 dotnet ef database update
 dotnet run
 ```
+
+Notes:
+
+- The command dotnet ef database update applies the main EF schema, including OWASP audit tables.
+- On first startup, the API bootstraps the secondary logging database and ApplicationLogs table.
 
 Then open the Swagger UI at:
 
@@ -67,6 +75,56 @@ The API uses a shared Result pattern for service-layer operations. Each service 
 - an optional HTTP status code
 
 Controllers translate those results into HTTP responses so callers receive consistent payloads.
+
+Successful API responses are standardized with:
+
+- success
+- message
+- data
+
+Failure API responses are standardized with:
+
+- success
+- message
+
+This response shaping is centralized in Common/Result.cs.
+
+## Security audit logging
+
+OWASP-aligned audit logging is implemented for authentication and FIDO2 flows.
+
+- AuthenticationAuditEvents: authentication attempt telemetry
+- SecurityAuditEvents: security event ledger with contextual metadata
+
+Audit writes are centralized in Services/Implementatons/AuditService.cs and integrated into AuthService and Fido2MfaService.
+
+See:
+
+- OWASP_AUDIT_PLAN.md
+- migration AddOwaspAuditTables
+
+## Secondary logging database
+
+Infrastructure logs from ILogger are written to a dedicated SQL Server database:
+
+- Database: AuthenticationFido2Logs
+- Table: dbo.ApplicationLogs
+
+Environment behavior:
+
+- Development: verbose logs
+- Production: error logs only
+
+Configuration is implemented in Extensions/LoggingExtensions.cs.
+
+See LOGGING_DATABASE_MIGRATION.md for setup and verification.
+
+## Repository hygiene
+
+A root gitignore is configured to ignore build output directories (bin and obj).
+If those files were previously tracked, they must be removed from index once with:
+
+- git rm -r --cached bin obj
 
 ## Main API flows
 
@@ -99,3 +157,5 @@ Controllers translate those results into HTTP responses so callers receive consi
 ## Related documentation
 
 - [Architecture](./ARCHITECTURE.md)
+- [OWASP Audit Plan](./OWASP_AUDIT_PLAN.md)
+- [Logging Database Migration](./LOGGING_DATABASE_MIGRATION.md)

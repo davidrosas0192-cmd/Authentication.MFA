@@ -11,9 +11,13 @@ flowchart LR
     Client[Client / Browser] --> Controller[Controllers]
     Controller --> Service[Services]
     Service --> Repo[Repositories]
-    Repo --> Db[(SQL Server)]
+    Repo --> Db[(Primary SQL Server DB)]
     Service --> Fido2[FIDO2/WebAuthn Library]
     Service --> Token[JWT Token Service]
+    Service --> AuditSvc[Audit Service]
+    AuditSvc --> AuditDb[(Primary SQL Server DB Audit Tables)]
+    Controller --> Logger[ILogger / Serilog]
+    Logger --> LogDb[(Secondary SQL Server Logging DB)]
 ```
 
 ## Layers
@@ -66,6 +70,20 @@ Key files:
 - Data/Configurations/*.cs
 - Migrations/
 
+### 5. Observability and audit layer
+
+The system uses two complementary logging paths:
+
+- Application diagnostics logging:
+    - Uses ILogger with Serilog sink to SQL Server.
+    - Stores request and application logs in a secondary database table dbo.ApplicationLogs.
+    - Environment-based level policy: Development verbose, Production errors only.
+
+- Security and authentication auditing:
+    - Uses explicit EF entities and writes through IAuditService.
+    - Stores domain-level audit events in AuthenticationAuditEvents and SecurityAuditEvents.
+    - Designed for pentesting evidence and security investigations.
+
 ## Domain entities
 
 ### User
@@ -88,6 +106,11 @@ Tracks temporary FIDO2 registration and login challenges, including expiry and u
 ## Result pattern
 
 A shared Result wrapper sits between the service layer and the API layer. This keeps business logic explicit and makes it easier to return both domain data and HTTP-oriented outcomes without scattering error handling across controllers.
+
+Response payload generation is centralized in Common/Result.cs so controllers produce a consistent API envelope:
+
+- Success payload includes success, message, and data.
+- Failure payload includes success and message.
 
 The pattern is used for:
 
@@ -124,6 +147,14 @@ Application services are registered in the service collection extension:
 
 - Extensions/ServiceCollectionExtensions.cs
 
+Current DI setup includes:
+
+- Auth and token services
+- FIDO2 service
+- Audit service
+- User, credential, and transaction repositories
+- HttpContext accessor for request metadata enrichment in auditing
+
 This keeps startup wiring centralized and makes the application easier to extend.
 
 ## Configuration concerns
@@ -131,6 +162,7 @@ This keeps startup wiring centralized and makes the application easier to extend
 The application uses configuration sections for:
 
 - database connection string
+- logging database connection string
 - JWT authentication
 - MFA JWT settings
 - FIDO2 server settings

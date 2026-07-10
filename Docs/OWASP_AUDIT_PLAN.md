@@ -37,6 +37,18 @@ This API handles sensitive authentication workflows (password login + FIDO2 MFA)
 - FIDO2 login completion success/failure.
 - Validation failures (invalid/expired/used transaction).
 
+## Implementation References
+- Audit service interface: Services/Interfaces/IAuditService.cs
+- Audit service implementation: Services/Implementatons/AuditService.cs
+- Audit entities:
+	- Entities/AuthenticationAuditEvent.cs
+	- Entities/SecurityAuditEvent.cs
+- EF configurations:
+	- Data/Configurations/AuthenticationAuditEventConfiguration.cs
+	- Data/Configurations/SecurityAuditEventConfiguration.cs
+- EF migration:
+	- Migrations/20260710011815_AddOwaspAuditTables.cs
+
 ## Data Handling Rules
 - Never log request passwords or bearer tokens.
 - Never log complete credential public key payloads or authenticator raw payloads.

@@ -1,7 +1,8 @@
 using Authentication.Fido2.Entities;
+using Authentication.Fido2.Data.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace Authentication.Fido2.Data.Repositories.Interfaces;
+namespace Authentication.Fido2.Data.Repositories.Implementations;
 
 public class Fido2TransactionRepository : IFido2TransactionRepository
 {

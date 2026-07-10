@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "mMJj8RloHnM=",
+  "dgSpecHash": "9vEW2QcNRyA=",
   "success": true,
-  "projectFilePath": "/Users/daviddelacruz/Documents/Development/Apis/Authentication.Fido2/Authentication.Fido2.csproj",
+  "projectFilePath": "/Users/daviddelacruz/Documents/repos/Authentication.MFA/Authentication.Fido2.csproj",
   "expectedPackageFiles": [
     "/Users/daviddelacruz/.nuget/packages/azure.core/1.47.1/azure.core.1.47.1.nupkg.sha512",
     "/Users/daviddelacruz/.nuget/packages/azure.identity/1.14.2/azure.identity.1.14.2.nupkg.sha512",

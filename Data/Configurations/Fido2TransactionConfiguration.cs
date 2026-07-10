@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Authentication.Fido2.Entities;
 
 
-namespace Authentication.Fido2.Data.Congiuration;
+namespace Authentication.Fido2.Data.Configurations;
 
 public class Fido2TransactionConfiguration : IEntityTypeConfiguration<Fido2Transaction>
 {

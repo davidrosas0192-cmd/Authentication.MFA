@@ -1,8 +1,11 @@
 using Authentication.Fido2.Data;
 using Authentication.Fido2.Extensions;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.ConfigureSqlServerLogging();
 
 builder.Services.AddControllers();
 
@@ -22,6 +25,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {

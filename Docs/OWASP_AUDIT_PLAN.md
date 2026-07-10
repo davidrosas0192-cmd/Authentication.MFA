@@ -31,6 +31,9 @@ This API handles sensitive authentication workflows (password login + FIDO2 MFA)
 
 ## Event Coverage (Implemented)
 - Password login success/failure.
+- MFA required login handoff (MfaTransactionId + MfaToken issuance).
+- SMS/Email enrollment start/verify success/failure.
+- SMS/Email login challenge start/verify success/failure.
 - FIDO2 enrollment option issuance success/failure.
 - FIDO2 enrollment completion success/failure.
 - FIDO2 login option issuance success/failure.
@@ -61,6 +64,8 @@ This API handles sensitive authentication workflows (password login + FIDO2 MFA)
 - Verify correlation of events by `CorrelationId`.
 - Verify PII minimization in logs.
 - Verify DB indexes for event lookup are present.
+- Verify MFA challenge endpoints reject full access token and require MFA token.
+- Verify MFA token claim binding (`mfa_tx`) cannot be reused for other transactions.
 
 ## Operational Follow-up
 - Add retention and archival policy (for example: hot 90 days, archive 1 year).

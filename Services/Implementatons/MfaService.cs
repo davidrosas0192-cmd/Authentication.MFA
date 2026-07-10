@@ -66,6 +66,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(
+        long userId,
         StartMfaChallengeRequest request,
         string? ipAddress,
         string? userAgent,
@@ -77,7 +78,7 @@ public class MfaService : IMfaService
             cancellationToken
         );
 
-        if (challenge is null || challenge.ExpiresAtUtc < DateTime.UtcNow)
+        if (challenge is null || challenge.ExpiresAtUtc < DateTime.UtcNow || challenge.UserId != userId)
         {
             return Result<StartMfaChallengeResponse>.Failure(
                 "Invalid or expired MFA transaction.",
@@ -157,6 +158,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<LoginResponse>> VerifyChallengeAsync(
+        long userId,
         VerifyMfaChallengeRequest request,
         CancellationToken cancellationToken
     )
@@ -166,7 +168,7 @@ public class MfaService : IMfaService
             cancellationToken
         );
 
-        if (challenge is null || challenge.ExpiresAtUtc < DateTime.UtcNow)
+        if (challenge is null || challenge.ExpiresAtUtc < DateTime.UtcNow || challenge.UserId != userId)
         {
             return Result<LoginResponse>.Failure(
                 "Invalid or expired MFA challenge.",

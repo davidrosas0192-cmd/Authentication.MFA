@@ -14,6 +14,7 @@ public static class ServiceCollectionExtensions
         // Register your application services here
         // Example: services.AddScoped<IYourService, YourServiceImplementation>();
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
+        services.Configure<MfaJwtOptions>(configuration.GetSection("MfaJwt"));
         services.Configure<Fido2Options>(configuration.GetSection("Fido2"));
         services.Configure<TwilioOptions>(configuration.GetSection("Twilio"));
         services.AddHttpContextAccessor();

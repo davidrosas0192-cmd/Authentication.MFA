@@ -8,12 +8,14 @@ public interface IMfaService
 {
     Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken);
     Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(
+        long userId,
         StartMfaChallengeRequest request,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
     );
     Task<Result<LoginResponse>> VerifyChallengeAsync(
+        long userId,
         VerifyMfaChallengeRequest request,
         CancellationToken cancellationToken
     );

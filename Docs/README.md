@@ -172,3 +172,4 @@ If those files were previously tracked, they must be removed from index once wit
 - [Logging Database Migration](./LOGGING_DATABASE_MIGRATION.md)
 - [Twilio MFA Implementation Plan](./TWILIO_MFA_IMPLEMENTATION_PLAN.md)
 - [MFA Enrollment Guide](./MFA_ENROLLMENT_GUIDE.md)
+- [API Endpoint Flow Guide](./API_ENDPOINT_FLOW_GUIDE.md)

@@ -13,10 +13,12 @@ namespace Authentication.Fido2.Services.Implementations;
 public class TokenService : ITokenService
 {
     private readonly JwtOptions _jwtOptions;
+    private readonly MfaJwtOptions _mfaJwtOptions;
 
-    public TokenService(IOptions<JwtOptions> jwtOptions)
+    public TokenService(IOptions<JwtOptions> jwtOptions, IOptions<MfaJwtOptions> mfaJwtOptions)
     {
         _jwtOptions = jwtOptions.Value;
+        _mfaJwtOptions = mfaJwtOptions.Value;
     }
 
     public string CreateAccessToken(User user)
@@ -47,5 +49,31 @@ public class TokenService : ITokenService
     {
         var bytes = RandomNumberGenerator.GetBytes(64);
         return Convert.ToBase64String(bytes);
+    }
+
+    public string CreateMfaToken(User user, Guid mfaTransactionId)
+    {
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.Username),
+            new("token_type", "mfa"),
+            new("mfa_tx", mfaTransactionId.ToString()),
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_mfaJwtOptions.SecretKey));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: _mfaJwtOptions.Issuer,
+            audience: _mfaJwtOptions.Audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(_mfaJwtOptions.ExpirationMinutes),
+            signingCredentials: credentials
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

@@ -1,6 +1,7 @@
 using Authentication.Fido2.Common;
 using Authentication.Fido2.DTOs.Auth;
 using Authentication.Fido2.DTOs.Mfa;
+using Authentication.Fido2.Extensions;
 using Authentication.Fido2.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -46,6 +47,7 @@ public class MfaController : ControllerBase
     }
 
     [HttpPost("challenges/start")]
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
     public async Task<IActionResult> StartChallenge(
         [FromBody] StartMfaChallengeRequest request,
         CancellationToken cancellationToken
@@ -53,7 +55,22 @@ public class MfaController : ControllerBase
     {
         try
         {
+            var userIdValue = User.FindFirst("sub")?.Value;
+            var tokenType = User.FindFirst("token_type")?.Value;
+            var tokenTransactionId = User.FindFirst("mfa_tx")?.Value;
+
+            if (
+                !long.TryParse(userIdValue, out var userId)
+                || !string.Equals(tokenType, "mfa", StringComparison.OrdinalIgnoreCase)
+                || !Guid.TryParse(tokenTransactionId, out var transactionId)
+                || transactionId != request.MfaTransactionId
+            )
+            {
+                return Unauthorized(new { message = "Invalid MFA token." });
+            }
+
             var response = await _mfaService.StartChallengeAsync(
+                userId,
                 request,
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
                 Request.Headers.UserAgent.ToString(),
@@ -70,6 +87,7 @@ public class MfaController : ControllerBase
     }
 
     [HttpPost("challenges/verify")]
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
     public async Task<IActionResult> VerifyChallenge(
         [FromBody] VerifyMfaChallengeRequest request,
         CancellationToken cancellationToken
@@ -77,7 +95,25 @@ public class MfaController : ControllerBase
     {
         try
         {
-            var response = await _mfaService.VerifyChallengeAsync(request, cancellationToken);
+            var userIdValue = User.FindFirst("sub")?.Value;
+            var tokenType = User.FindFirst("token_type")?.Value;
+            var tokenTransactionId = User.FindFirst("mfa_tx")?.Value;
+
+            if (
+                !long.TryParse(userIdValue, out var userId)
+                || !string.Equals(tokenType, "mfa", StringComparison.OrdinalIgnoreCase)
+                || !Guid.TryParse(tokenTransactionId, out var transactionId)
+                || transactionId != request.MfaTransactionId
+            )
+            {
+                return Unauthorized(new { message = "Invalid MFA token." });
+            }
+
+            var response = await _mfaService.VerifyChallengeAsync(
+                userId,
+                request,
+                cancellationToken
+            );
 
             return ToActionResult(response);
         }

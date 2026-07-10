@@ -1,7 +1,9 @@
 using Authentication.Fido2.Common;
 using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.DTOs.Auth;
+using Authentication.Fido2.Options;
 using Authentication.Fido2.Services.Interfaces;
+using Microsoft.Extensions.Options;
 
 namespace Authentication.Fido2.Services.Implementations;
 
@@ -11,18 +13,21 @@ public class AuthService : IAuthService
     private readonly ITokenService _tokenService;
     private readonly IAuditService _auditService;
     private readonly IMfaService _mfaService;
+    private readonly MfaJwtOptions _mfaJwtOptions;
 
     public AuthService(
         IUserRepository userRepository,
         ITokenService tokenService,
         IAuditService auditService,
-        IMfaService mfaService
+        IMfaService mfaService,
+        IOptions<MfaJwtOptions> mfaJwtOptions
     )
     {
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _tokenService = tokenService;
         _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
         _mfaService = mfaService ?? throw new ArgumentNullException(nameof(mfaService));
+        _mfaJwtOptions = mfaJwtOptions.Value;
     }
 
     public async Task<Result<LoginResponse>> LoginAsync(
@@ -80,6 +85,7 @@ public class AuthService : IAuthService
                 userAgent,
                 cancellationToken
             );
+            var mfaToken = _tokenService.CreateMfaToken(user, mfaTransactionId);
 
             await _auditService.TrackAuthenticationEventAsync(
                 user.Id,
@@ -109,6 +115,8 @@ public class AuthService : IAuthService
                     RequiresFido2 = allowedMfaMethods.Contains("fido2"),
                     MfaRequired = true,
                     MfaTransactionId = mfaTransactionId,
+                    MfaToken = mfaToken,
+                    MfaExpiresIn = _mfaJwtOptions.ExpirationMinutes * 60,
                     AllowedMfaMethods = allowedMfaMethods,
                 },
                 "MFA verification required."

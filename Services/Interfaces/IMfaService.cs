@@ -7,6 +7,7 @@ namespace Authentication.Fido2.Services.Interfaces;
 public interface IMfaService
 {
     Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken);
+    Task<List<string>> GetAvailableSetupMethodsAsync(long userId, CancellationToken cancellationToken);
     Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(
         long userId,
         StartMfaChallengeRequest request,

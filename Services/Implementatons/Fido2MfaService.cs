@@ -20,6 +20,7 @@ public class Fido2MfaService : IFido2MfaService
     private readonly IFido2CredentialRepository _credentialRepository;
     private readonly IFido2TransactionRepository _transactionRepository;
     private readonly ITokenService _tokenService;
+    private readonly IMfaService _mfaService;
     private readonly IAccessTokenSessionRepository _accessTokenSessionRepository;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly IAuditService _auditService;
@@ -31,6 +32,7 @@ public class Fido2MfaService : IFido2MfaService
         IFido2CredentialRepository credentialRepository,
         IFido2TransactionRepository transactionRepository,
         ITokenService tokenService,
+        IMfaService mfaService,
         IAccessTokenSessionRepository accessTokenSessionRepository,
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
         IAuditService auditService,
@@ -44,6 +46,7 @@ public class Fido2MfaService : IFido2MfaService
         _transactionRepository =
             transactionRepository ?? throw new ArgumentNullException(nameof(transactionRepository));
         _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
+        _mfaService = mfaService ?? throw new ArgumentNullException(nameof(mfaService));
         _accessTokenSessionRepository =
             accessTokenSessionRepository
             ?? throw new ArgumentNullException(nameof(accessTokenSessionRepository));
@@ -592,8 +595,11 @@ public class Fido2MfaService : IFido2MfaService
             new LoginResponse
             {
                 MfaRequired = false,
+                Status = "Authenticated",
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
+                ExpiresIn = 15 * 60,
+                AvailableMfaSetupOptions = await _mfaService.GetAvailableSetupMethodsAsync(user.Id, cancellationToken),
             },
             "Login completed successfully."
         );

@@ -47,9 +47,39 @@ public class MfaService : IMfaService
 
     public async Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken)
     {
-        var methods = await _mfaMethodRepository.GetEnabledByUserIdAsync(userId, cancellationToken);
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            return [];
+        }
 
-        return methods.Select(x => x.Method).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var methods = await _mfaMethodRepository.GetEnabledByUserIdAsync(userId, cancellationToken);
+        var normalized = methods
+            .Select(x => x.Method.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (user.IsFido2MfaEnabled && !normalized.Contains(MfaMethodTypes.Fido2, StringComparer.OrdinalIgnoreCase))
+        {
+            normalized.Add(MfaMethodTypes.Fido2);
+        }
+
+        return normalized;
+    }
+
+    public async Task<List<string>> GetAvailableSetupMethodsAsync(long userId, CancellationToken cancellationToken)
+    {
+        var enabled = await GetAllowedMethodsAsync(userId, cancellationToken);
+        var allOptions = new List<string>
+        {
+            MfaMethodTypes.Sms,
+            MfaMethodTypes.Email,
+            MfaMethodTypes.Fido2,
+        };
+
+        return allOptions
+            .Where(x => !enabled.Contains(x, StringComparer.OrdinalIgnoreCase))
+            .ToList();
     }
 
     public async Task<Guid> CreateSelectionChallengeAsync(
@@ -308,6 +338,7 @@ public class MfaService : IMfaService
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
                 ExpiresIn = 15 * 60,
+                AvailableMfaSetupOptions = await GetAvailableSetupMethodsAsync(user.Id, cancellationToken),
             },
             "MFA verification succeeded."
         );

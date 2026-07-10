@@ -86,10 +86,6 @@ public class AuthService : IAuthService
         }
 
         var allowedMfaMethods = await _mfaService.GetAllowedMethodsAsync(user.Id, cancellationToken);
-        if (allowedMfaMethods.Count == 0 && user.IsFido2MfaEnabled)
-        {
-            allowedMfaMethods.Add("fido2");
-        }
 
         if (allowedMfaMethods.Count > 0)
         {
@@ -221,11 +217,7 @@ public class AuthService : IAuthService
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
                 ExpiresIn = 15 * 60,
-                AvailableMfaSetupOptions = [
-                    MfaMethodTypes.Sms,
-                    MfaMethodTypes.Email,
-                    MfaMethodTypes.Fido2,
-                ],
+                AvailableMfaSetupOptions = await _mfaService.GetAvailableSetupMethodsAsync(user.Id, cancellationToken),
             },
             "Authentication succeeded."
         );

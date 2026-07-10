@@ -171,6 +171,7 @@
   }
 
   function render() {
+    renderAuthTheme();
     renderBadges();
     renderTokens();
     renderMfaMethods();
@@ -178,6 +179,11 @@
     renderEndpointHints();
     renderFlowVisibility();
     renderTransactionFields();
+  }
+
+  function renderAuthTheme() {
+    const theme = state.accessToken ? "full" : state.mfaToken ? "mfa" : "anonymous";
+    document.body.setAttribute("data-auth-state", theme);
   }
 
   function renderBadges() {
@@ -562,8 +568,10 @@
       state.selectedSetupMethod = null;
 
       if ((state.availableMfaSetupOptions || []).length > 0) {
+        showAuthSuccessPopup("Authenticated successfully.");
         focusCard(refs.setupMfaCard);
       } else {
+        showAuthSuccessPopup("Authenticated successfully. All MFA methods are already configured.");
         focusCard(refs.mfaEnrollmentCard);
       }
     }
@@ -638,6 +646,7 @@
     state.selectedVerifyMethod = null;
     persistState();
     render();
+    showAuthSuccessPopup("Authenticated successfully.");
     focusCard(refs.setupMfaCard.hidden ? refs.loginCard : refs.setupMfaCard);
   }
 
@@ -689,6 +698,7 @@
     state.selectedVerifyMethod = null;
     persistState();
     render();
+    showAuthSuccessPopup("Authenticated successfully.");
     focusCard(refs.setupMfaCard.hidden ? refs.loginCard : refs.setupMfaCard);
   }
 
@@ -837,6 +847,10 @@
     void actionName;
     logs.length = 0;
     refs.consoleOutput.innerHTML = "";
+  }
+
+  function showAuthSuccessPopup(message) {
+    window.alert(message);
   }
 
   function focusCard(element) {

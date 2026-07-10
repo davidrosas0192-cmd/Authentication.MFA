@@ -30,9 +30,6 @@ flowchart LR
     MfaService --> AuditSvc
     Fido2MfaService --> AuditSvc
     AuditSvc --> PrimaryDb
-
-    Controllers[Controllers] --> Serilog[ILogger/Serilog]
-    Serilog --> LogDb[(Secondary SQL Logging DB)]
 ```
 
 ## Layers
@@ -95,16 +92,9 @@ Key files:
 
 ## 5. Observability and audit layer
 
-Two logging paths are implemented:
+Security/authentication auditing is implemented through explicit audit records written by AuditService.
 
-- Application diagnostics logging:
-  - ILogger + Serilog sink to secondary SQL logging DB
-  - Table: dbo.ApplicationLogs
-  - Dev: verbose, Prod: errors only
-
-- Security/authentication auditing:
-  - Explicit audit records through AuditService
-  - Tables: AuthenticationAuditEvents, SecurityAuditEvents
+- Tables: AuthenticationAuditEvents, SecurityAuditEvents
 
 ## Domain entities
 
@@ -156,7 +146,7 @@ FIDO2 flows remain available through Fido2Controller and Fido2MfaService.
 
 ## Configuration sections
 
-- ConnectionStrings: DefaultConnection, LoggingConnection
+- ConnectionStrings: DefaultConnection
 - Jwt
 - MfaJwt
 - Fido2

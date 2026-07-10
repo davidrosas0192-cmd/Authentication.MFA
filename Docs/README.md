@@ -11,7 +11,6 @@ This project is an ASP.NET Core Web API that provides authentication using tradi
 - Issues JWT access and refresh tokens
 - Stores user, credential, and transaction data in SQL Server using Entity Framework Core
 - Stores OWASP-aligned security audit events for authentication flows
-- Writes infrastructure logs to a dedicated secondary SQL Server logging database
 
 ## Tech stack
 
@@ -43,7 +42,6 @@ This project is an ASP.NET Core Web API that provides authentication using tradi
 Update the connection string and secrets in appsettings.json or environment-specific settings:
 
 - Connection string: DefaultConnection
-- Logging connection string: LoggingConnection
 - JWT settings: Jwt
 - MFA JWT settings: MfaJwt
 - FIDO2 settings: Fido2
@@ -60,7 +58,6 @@ dotnet run
 Notes:
 
 - The command dotnet ef database update applies the main EF schema, including OWASP audit tables.
-- On first startup, the API bootstraps the secondary logging database and ApplicationLogs table.
 
 Then open the Swagger UI at:
 
@@ -104,22 +101,6 @@ See:
 
 - OWASP_AUDIT_PLAN.md
 - migration AddOwaspAuditTables
-
-## Secondary logging database
-
-Infrastructure logs from ILogger are written to a dedicated SQL Server database:
-
-- Database: AuthenticationFido2Logs
-- Table: dbo.ApplicationLogs
-
-Environment behavior:
-
-- Development: verbose logs
-- Production: error logs only
-
-Configuration is implemented in Extensions/LoggingExtensions.cs.
-
-See LOGGING_DATABASE_MIGRATION.md for setup and verification.
 
 ## Repository hygiene
 
@@ -183,7 +164,6 @@ If those files were previously tracked, they must be removed from index once wit
 
 - [Architecture](./ARCHITECTURE.md)
 - [OWASP Audit Plan](./OWASP_AUDIT_PLAN.md)
-- [Logging Database Migration](./LOGGING_DATABASE_MIGRATION.md)
 - [Twilio MFA Implementation Plan](./TWILIO_MFA_IMPLEMENTATION_PLAN.md)
 - [MFA Enrollment Guide](./MFA_ENROLLMENT_GUIDE.md)
 - [API Endpoint Flow Guide](./API_ENDPOINT_FLOW_GUIDE.md)

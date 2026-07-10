@@ -9,11 +9,13 @@ public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly ITokenService _tokenService;
+    private readonly IAuditService _auditService;
 
-    public AuthService(IUserRepository userRepository, ITokenService tokenService)
+    public AuthService(IUserRepository userRepository, ITokenService tokenService, IAuditService auditService)
     {
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _tokenService = tokenService;
+        _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
     }
 
     public async Task<Result<LoginResponse>> LoginAsync(
@@ -30,6 +32,27 @@ public class AuthService : IAuthService
 
         if (user is null || !user.IsActive || user.PasswordHash != request.Password)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                null,
+                request.Username,
+                "password_login",
+                "password",
+                false,
+                "Invalid credentials",
+                cancellationToken
+            );
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.password.login",
+                "Warning",
+                false,
+                null,
+                request.Username,
+                "Invalid credentials",
+                null,
+                cancellationToken
+            );
+
             return Result<LoginResponse>.Failure(
                 "Invalid credentials.",
                 StatusCodes.Status401Unauthorized
@@ -38,6 +61,27 @@ public class AuthService : IAuthService
 
         if (user.IsFido2MfaEnabled)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                user.Id,
+                user.Username,
+                "password_login",
+                "password",
+                true,
+                null,
+                cancellationToken
+            );
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.password.login_requires_mfa",
+                "Information",
+                true,
+                user.Id,
+                user.Username,
+                null,
+                new { requiresFido2 = true },
+                cancellationToken
+            );
+
             return Result<LoginResponse>.Success(
                 new LoginResponse
                 {
@@ -47,6 +91,27 @@ public class AuthService : IAuthService
                 "FIDO2 verification required."
             );
         }
+
+        await _auditService.TrackAuthenticationEventAsync(
+            user.Id,
+            user.Username,
+            "password_login",
+            "password",
+            true,
+            null,
+            cancellationToken
+        );
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.password.login_success",
+            "Information",
+            true,
+            user.Id,
+            user.Username,
+            null,
+            null,
+            cancellationToken
+        );
 
         return Result<LoginResponse>.Success(
             new LoginResponse

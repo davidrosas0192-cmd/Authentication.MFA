@@ -18,13 +18,15 @@ public class Fido2MfaService : IFido2MfaService
     private readonly IFido2CredentialRepository _credentialRepository;
     private readonly IFido2TransactionRepository _transactionRepository;
     private readonly ITokenService _tokenService;
+    private readonly IAuditService _auditService;
 
     public Fido2MfaService(
         IFido2 fido2,
         IUserRepository userRepository,
         IFido2CredentialRepository credentialRepository,
         IFido2TransactionRepository transactionRepository,
-        ITokenService tokenService
+        ITokenService tokenService,
+        IAuditService auditService
     )
     {
         _fido2 = fido2 ?? throw new ArgumentNullException(nameof(fido2));
@@ -34,6 +36,7 @@ public class Fido2MfaService : IFido2MfaService
         _transactionRepository =
             transactionRepository ?? throw new ArgumentNullException(nameof(transactionRepository));
         _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
+        _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
     }
 
     public async Task<Result<Fido2OptionsResponse>> CreateEnrollmentOptionsAsync(
@@ -47,11 +50,35 @@ public class Fido2MfaService : IFido2MfaService
 
         if (user is null)
         {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.fido2.enrollment.options",
+                "Warning",
+                false,
+                userId,
+                null,
+                "User not found",
+                null,
+                cancellationToken
+            );
+
             return Result<Fido2OptionsResponse>.Failure("User not found.", StatusCodes.Status404NotFound);
         }
 
         if (!user.IsActive)
         {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.fido2.enrollment.options",
+                "Warning",
+                false,
+                user.Id,
+                user.Username,
+                "User inactive",
+                null,
+                cancellationToken
+            );
+
             return Result<Fido2OptionsResponse>.Failure("User is inactive.", StatusCodes.Status403Forbidden);
         }
 
@@ -101,6 +128,27 @@ public class Fido2MfaService : IFido2MfaService
 
         await _transactionRepository.AddAsync(transaction, cancellationToken);
 
+        await _auditService.TrackAuthenticationEventAsync(
+            user.Id,
+            user.Username,
+            "fido2_enrollment_options",
+            "fido2",
+            true,
+            null,
+            cancellationToken
+        );
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.fido2.enrollment.options",
+            "Information",
+            true,
+            user.Id,
+            user.Username,
+            null,
+            new { transactionId = transaction.Id },
+            cancellationToken
+        );
+
         return Result<Fido2OptionsResponse>.Success(
             new Fido2OptionsResponse { TransactionId = transaction.Id, Options = options },
             "Enrollment options created."
@@ -123,6 +171,16 @@ public class Fido2MfaService : IFido2MfaService
         );
         if (validationResult is not null)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                transaction?.UserId,
+                null,
+                "fido2_enrollment_complete",
+                "fido2",
+                false,
+                validationResult.Error ?? validationResult.Message,
+                cancellationToken
+            );
+
             return validationResult;
         }
 
@@ -165,6 +223,27 @@ public class Fido2MfaService : IFido2MfaService
 
         await _transactionRepository.UpdateAsync(transaction, cancellationToken);
 
+        await _auditService.TrackAuthenticationEventAsync(
+            transaction.UserId,
+            null,
+            "fido2_enrollment_complete",
+            "fido2",
+            true,
+            null,
+            cancellationToken
+        );
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.fido2.enrollment.complete",
+            "Information",
+            true,
+            transaction.UserId,
+            null,
+            null,
+            new { transactionId = transaction.Id },
+            cancellationToken
+        );
+
         return Result<string>.Success("FIDO2 credential registered successfully.");
     }
 
@@ -177,6 +256,16 @@ public class Fido2MfaService : IFido2MfaService
     {
         if (string.IsNullOrWhiteSpace(request.UsernameOrEmail))
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                null,
+                request.UsernameOrEmail,
+                "fido2_login_options",
+                "fido2",
+                false,
+                "Username or email is required",
+                cancellationToken
+            );
+
             return Result<Fido2OptionsResponse>.Failure("Username or email is required.", StatusCodes.Status400BadRequest);
         }
 
@@ -187,16 +276,46 @@ public class Fido2MfaService : IFido2MfaService
 
         if (user is null)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                null,
+                request.UsernameOrEmail,
+                "fido2_login_options",
+                "fido2",
+                false,
+                "Invalid request",
+                cancellationToken
+            );
+
             return Result<Fido2OptionsResponse>.Failure("Invalid request.", StatusCodes.Status400BadRequest);
         }
 
         if (!user.IsActive)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                user.Id,
+                user.Username,
+                "fido2_login_options",
+                "fido2",
+                false,
+                "User inactive",
+                cancellationToken
+            );
+
             return Result<Fido2OptionsResponse>.Failure("User is inactive.", StatusCodes.Status403Forbidden);
         }
 
         if (!user.IsFido2MfaEnabled)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                user.Id,
+                user.Username,
+                "fido2_login_options",
+                "fido2",
+                false,
+                "FIDO2 MFA is not enabled",
+                cancellationToken
+            );
+
             return Result<Fido2OptionsResponse>.Failure("FIDO2 MFA is not enabled.", StatusCodes.Status400BadRequest);
         }
 
@@ -204,6 +323,16 @@ public class Fido2MfaService : IFido2MfaService
 
         if (credentials.Count == 0)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                user.Id,
+                user.Username,
+                "fido2_login_options",
+                "fido2",
+                false,
+                "No FIDO2 credentials found",
+                cancellationToken
+            );
+
             return Result<Fido2OptionsResponse>.Failure("No FIDO2 credentials found.", StatusCodes.Status404NotFound);
         }
 
@@ -235,6 +364,27 @@ public class Fido2MfaService : IFido2MfaService
 
         await _transactionRepository.AddAsync(transaction, cancellationToken);
 
+        await _auditService.TrackAuthenticationEventAsync(
+            user.Id,
+            user.Username,
+            "fido2_login_options",
+            "fido2",
+            true,
+            null,
+            cancellationToken
+        );
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.fido2.login.options",
+            "Information",
+            true,
+            user.Id,
+            user.Username,
+            null,
+            new { transactionId = transaction.Id },
+            cancellationToken
+        );
+
         return Result<Fido2OptionsResponse>.Success(
             new Fido2OptionsResponse { TransactionId = transaction.Id, Options = options },
             "Login options created."
@@ -257,6 +407,16 @@ public class Fido2MfaService : IFido2MfaService
         );
         if (validationResult is not null)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                transaction?.UserId,
+                null,
+                "fido2_login_complete",
+                "fido2",
+                false,
+                validationResult.Error ?? validationResult.Message,
+                cancellationToken
+            );
+
             return validationResult;
         }
 
@@ -269,11 +429,31 @@ public class Fido2MfaService : IFido2MfaService
 
         if (credential is null)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                transaction.UserId,
+                null,
+                "fido2_login_complete",
+                "fido2",
+                false,
+                "Unknown FIDO2 credential",
+                cancellationToken
+            );
+
             return Result<LoginResponse>.Failure("Unknown FIDO2 credential.", StatusCodes.Status401Unauthorized);
         }
 
         if (credential.UserId != transaction.UserId)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                transaction.UserId,
+                null,
+                "fido2_login_complete",
+                "fido2",
+                false,
+                "Credential does not belong to transaction user",
+                cancellationToken
+            );
+
             return Result<LoginResponse>.Failure(
                 "Credential does not belong to transaction user.",
                 StatusCodes.Status401Unauthorized
@@ -312,6 +492,16 @@ public class Fido2MfaService : IFido2MfaService
 
         if (user is null)
         {
+            await _auditService.TrackAuthenticationEventAsync(
+                transaction.UserId,
+                null,
+                "fido2_login_complete",
+                "fido2",
+                false,
+                "User not found",
+                cancellationToken
+            );
+
             return Result<LoginResponse>.Failure("User not found.", StatusCodes.Status404NotFound);
         }
 
@@ -321,6 +511,27 @@ public class Fido2MfaService : IFido2MfaService
 
         var accessToken = _tokenService.CreateAccessToken(user);
         var refreshToken = _tokenService.CreateRefreshToken();
+
+        await _auditService.TrackAuthenticationEventAsync(
+            user.Id,
+            user.Username,
+            "fido2_login_complete",
+            "fido2",
+            true,
+            null,
+            cancellationToken
+        );
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.fido2.login.complete",
+            "Information",
+            true,
+            user.Id,
+            user.Username,
+            null,
+            null,
+            cancellationToken
+        );
 
         return Result<LoginResponse>.Success(
             new LoginResponse

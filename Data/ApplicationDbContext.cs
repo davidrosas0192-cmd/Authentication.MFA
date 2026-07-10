@@ -15,6 +15,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserFido2Credential> UserFido2Credentials => Set<UserFido2Credential>();
     
     public DbSet<Fido2Transaction> Fido2Transations => Set<Fido2Transaction>();
+    public DbSet<SecurityAuditEvent> SecurityAuditEvents => Set<SecurityAuditEvent>();
+    public DbSet<AuthenticationAuditEvent> AuthenticationAuditEvents => Set<AuthenticationAuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

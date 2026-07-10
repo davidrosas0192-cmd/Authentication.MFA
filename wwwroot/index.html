@@ -41,6 +41,7 @@
         </div>
       </details>
       <div class="toolbar">
+        <button id="authActionBtn" class="ghost" hidden>Logout</button>
         <button id="clearSessionBtn" class="ghost">Clear Session</button>
         <button id="copyAccessBtn" class="ghost">Copy Access Token</button>
         <button id="copyMfaBtn" class="ghost">Copy MFA Token</button>
@@ -78,12 +79,14 @@
           <h2>Set Up MFA</h2>
           <p class="muted">Your account is authenticated and can now configure MFA.</p>
           <div id="setupOptionsGrid" class="option-grid"></div>
+          <div id="setupEndpointsHint" class="flow-hint" hidden></div>
         </article>
 
         <article class="card" id="mfaMethodsCard" hidden>
           <h2>Choose Verification Method</h2>
           <p class="muted">Available methods from login response.</p>
           <div id="mfaMethodsGrid" class="option-grid"></div>
+          <div id="verifyEndpointsHint" class="flow-hint" hidden></div>
         </article>
 
         <article class="card" id="mfaChallengeCard">
@@ -160,7 +163,7 @@
     </section>
   </main>
 
-  <script src="/webauthn.js"></script>
-  <script src="/app.js"></script>
+  <script src="/webauthn.js?v=3"></script>
+  <script src="/app.js?v=3"></script>
 </body>
 </html>

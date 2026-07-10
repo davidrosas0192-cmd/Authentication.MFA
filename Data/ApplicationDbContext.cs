@@ -18,6 +18,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserMfaMethod> UserMfaMethods => Set<UserMfaMethod>();
     public DbSet<MfaChallenge> MfaChallenges => Set<MfaChallenge>();
     public DbSet<MfaTempTokenSession> MfaTempTokenSessions => Set<MfaTempTokenSession>();
+    public DbSet<AccessTokenSession> AccessTokenSessions => Set<AccessTokenSession>();
     public DbSet<SecurityAuditEvent> SecurityAuditEvents => Set<SecurityAuditEvent>();
     public DbSet<AuthenticationAuditEvent> AuthenticationAuditEvents => Set<AuthenticationAuditEvent>();
 

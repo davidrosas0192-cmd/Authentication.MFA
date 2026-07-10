@@ -1,8 +1,12 @@
 using Microsoft.IdentityModel.Tokens;
 using Authentication.Fido2.Options;
+using Authentication.Fido2.Data.Repositories.Interfaces;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 
 namespace Authentication.Fido2.Extensions;
@@ -36,6 +40,31 @@ public static class AuthenticationExtensions
                     ValidAudience = jwtOptions.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SecretKey)),
                     ClockSkew = TimeSpan.FromMinutes(1)
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var userIdValue = context.Principal?.FindFirst("sub")?.Value
+                            ?? context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                            ?? context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var tokenJti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+
+                        if (!long.TryParse(userIdValue, out var userId) || string.IsNullOrWhiteSpace(tokenJti))
+                        {
+                            context.Fail("Invalid token claims.");
+                            return;
+                        }
+
+                        var repository = context.HttpContext.RequestServices.GetRequiredService<IAccessTokenSessionRepository>();
+                        var tokenSession = await repository.GetActiveByJtiAsync(tokenJti, context.HttpContext.RequestAborted);
+
+                        if (tokenSession is null || tokenSession.UserId != userId)
+                        {
+                            context.Fail("Token session is no longer valid.");
+                        }
+                    },
                 };
             })
             .AddJwtBearer(MfaScheme, options =>

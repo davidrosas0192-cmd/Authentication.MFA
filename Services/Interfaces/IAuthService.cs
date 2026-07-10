@@ -11,4 +11,8 @@ public interface IAuthService
         string? userAgent,
         CancellationToken cancellationToken
     );
+
+    Task<Result> LogoutAsync(long userId, string tokenJti, CancellationToken cancellationToken);
+
+    Task<Result> CancelAuthenticationAsync(long userId, string tokenJti, CancellationToken cancellationToken);
 }

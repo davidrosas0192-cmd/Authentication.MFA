@@ -53,4 +53,56 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
 
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task RevokeByJtiAsync(string tokenJti, string reason, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+
+        var sessions = await _context
+            .MfaTempTokenSessions.Where(
+                x => x.TokenJti == tokenJti
+                    && x.ConsumedAtUtc == null
+                    && x.RevokedAtUtc == null
+                    && x.ExpiresAtUtc > now
+            )
+            .ToListAsync(cancellationToken);
+
+        if (sessions.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var session in sessions)
+        {
+            session.RevokedAtUtc = now;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+
+        var sessions = await _context
+            .MfaTempTokenSessions.Where(
+                x => x.UserId == userId
+                    && x.ConsumedAtUtc == null
+                    && x.RevokedAtUtc == null
+                    && x.ExpiresAtUtc > now
+            )
+            .ToListAsync(cancellationToken);
+
+        if (sessions.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var session in sessions)
+        {
+            session.RevokedAtUtc = now;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
 }

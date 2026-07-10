@@ -9,6 +9,11 @@ Use your local host/port from launch settings or Swagger:
 - https://localhost:7183
 - http://localhost:5183
 
+Current launch profile values in this repo are:
+
+- https://localhost:7190
+- http://localhost:5190
+
 ## Response Envelope
 
 All controller responses follow this shape:
@@ -35,15 +40,25 @@ All controller responses follow this shape:
 ## Endpoint Index
 
 1. POST /api/auth/login
-2. GET /api/mfa/methods (Authorize: access token)
-3. POST /api/mfa/enrollment/start (Authorize: access token)
-4. POST /api/mfa/enrollment/verify (Authorize: access token)
-5. POST /api/mfa/challenges/start (Authorize: mfa token)
-6. POST /api/mfa/challenges/verify (Authorize: mfa token)
-7. POST /api/fido2/enrollment/options (Authorize: access token)
-8. POST /api/fido2/enrollment/complete (Authorize: access token)
-9. POST /api/fido2/login/options
-10. POST /api/fido2/login/complete
+2. POST /api/auth/logout (Authorize: access token)
+3. POST /api/auth/cancel-authentication (Authorize: mfa token)
+4. GET /api/mfa/methods (Authorize: access token)
+5. POST /api/mfa/enrollment/start (Authorize: access token)
+6. POST /api/mfa/enrollment/verify (Authorize: access token)
+7. POST /api/mfa/challenges/start (Authorize: mfa token)
+8. POST /api/mfa/challenges/verify (Authorize: mfa token)
+9. POST /api/fido2/enrollment/options (Authorize: access token)
+10. POST /api/fido2/enrollment/complete (Authorize: access token)
+11. POST /api/fido2/login/options (Authorize: mfa token)
+12. POST /api/fido2/login/complete (Authorize: mfa token)
+
+## Token Session Behavior
+
+- Full access tokens include a `jti` and are validated against server-side sessions.
+- MFA temp tokens include a `jti` and are validated against `MfaTempTokenSessions`.
+- A new successful login invalidates previous active token sessions for that user.
+- `POST /api/auth/logout` revokes the current full token session.
+- `POST /api/auth/cancel-authentication` revokes the current MFA temp token session.
 
 ## 1) Password Login Entry Point
 
@@ -264,6 +279,9 @@ Note:
 
 ### 6.1 POST /api/fido2/login/options
 
+Headers:
+- Authorization: Bearer <mfa_token>
+
 Request:
 
 ```json
@@ -277,6 +295,9 @@ Returns:
 - data.options (WebAuthn assertion options)
 
 ### 6.2 POST /api/fido2/login/complete
+
+Headers:
+- Authorization: Bearer <mfa_token>
 
 Request shape:
 
@@ -311,8 +332,8 @@ Note:
 - POST /api/fido2/login/complete -> tokens
 
 Note:
-- Current FIDO2 login endpoints are transaction-based and do not yet enforce MfaToken.
-- SMS/Email MFA challenge endpoints enforce MfaToken.
+- FIDO2 login endpoints enforce MfaToken and validate mfa_tx and token session context.
+- SMS/Email MFA challenge endpoints also enforce MfaToken.
 
 4. User enrolls new SMS/Email method:
 - POST /api/mfa/enrollment/start (Authorize)
@@ -327,6 +348,7 @@ Note:
 - Invalid credentials -> 401
 - Invalid/expired MFA transaction or challenge -> 400
 - Full access token used on MFA challenge endpoints -> 401 (MFA token required)
+- Full access token used on FIDO2 login endpoints -> 401 (MFA token required)
 - Invalid OTP code -> 401
 - Method not enabled for user -> 400
 - Invalid token on protected endpoints -> 401

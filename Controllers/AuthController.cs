@@ -1,7 +1,11 @@
 using Authentication.Fido2.Common;
 using Authentication.Fido2.DTOs.Auth;
+using Authentication.Fido2.Extensions;
 using Authentication.Fido2.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace Authentication.Fido2.Controllers;
 
@@ -42,6 +46,50 @@ public class AuthController : ControllerBase
         }
     }
 
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(User, out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token." });
+        }
+
+        var tokenJti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+        if (string.IsNullOrWhiteSpace(tokenJti))
+        {
+            return Unauthorized(new { message = "Invalid token." });
+        }
+
+        var response = await _authService.LogoutAsync(userId, tokenJti, cancellationToken);
+
+        return ToActionResult(response);
+    }
+
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [HttpPost("cancel-authentication")]
+    public async Task<IActionResult> CancelAuthentication(CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(User, out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token." });
+        }
+
+        var tokenJti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+        if (string.IsNullOrWhiteSpace(tokenJti))
+        {
+            return Unauthorized(new { message = "Invalid MFA token." });
+        }
+
+        var response = await _authService.CancelAuthenticationAsync(
+            userId,
+            tokenJti,
+            cancellationToken
+        );
+
+        return ToActionResult(response);
+    }
+
     private IActionResult ToActionResult<T>(Result<T> result)
     {
         var payload = result.ToResponsePayload();
@@ -52,5 +100,26 @@ public class AuthController : ControllerBase
         }
 
         return result.IsSuccess ? Ok(payload) : BadRequest(payload);
+    }
+
+    private IActionResult ToActionResult(Result result)
+    {
+        var payload = result.ToResponsePayload();
+
+        if (result.StatusCode.HasValue)
+        {
+            return StatusCode(result.StatusCode.Value, payload);
+        }
+
+        return result.IsSuccess ? Ok(payload) : BadRequest(payload);
+    }
+
+    private static bool TryGetUserId(ClaimsPrincipal user, out long userId)
+    {
+        var userIdValue = user.FindFirst("sub")?.Value
+            ?? user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+            ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        return long.TryParse(userIdValue, out userId);
     }
 }

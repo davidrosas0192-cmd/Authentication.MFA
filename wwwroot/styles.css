@@ -253,6 +253,20 @@ button.ghost {
   margin-bottom: 3px;
 }
 
+.flow-hint {
+  margin-top: 10px;
+  border: 1px solid #d8e8df;
+  background: #f6fbf8;
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 0.9rem;
+}
+
+.flow-hint code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+}
+
 .console-card {
   min-height: 540px;
 }

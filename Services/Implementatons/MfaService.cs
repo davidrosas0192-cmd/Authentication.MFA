@@ -4,7 +4,9 @@ using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.DTOs.Auth;
 using Authentication.Fido2.DTOs.Mfa;
 using Authentication.Fido2.Entities;
+using Authentication.Fido2.Options;
 using Authentication.Fido2.Services.Interfaces;
+using Microsoft.Extensions.Options;
 
 namespace Authentication.Fido2.Services.Implementations;
 
@@ -15,7 +17,10 @@ public class MfaService : IMfaService
     private readonly IUserRepository _userRepository;
     private readonly ITwilioOtpService _twilioOtpService;
     private readonly ITokenService _tokenService;
+    private readonly IAccessTokenSessionRepository _accessTokenSessionRepository;
+    private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly IAuditService _auditService;
+    private readonly JwtOptions _jwtOptions;
 
     public MfaService(
         IUserMfaMethodRepository mfaMethodRepository,
@@ -23,7 +28,10 @@ public class MfaService : IMfaService
         IUserRepository userRepository,
         ITwilioOtpService twilioOtpService,
         ITokenService tokenService,
-        IAuditService auditService
+        IAccessTokenSessionRepository accessTokenSessionRepository,
+        IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
+        IAuditService auditService,
+        IOptions<JwtOptions> jwtOptions
     )
     {
         _mfaMethodRepository = mfaMethodRepository;
@@ -31,7 +39,10 @@ public class MfaService : IMfaService
         _userRepository = userRepository;
         _twilioOtpService = twilioOtpService;
         _tokenService = tokenService;
+        _accessTokenSessionRepository = accessTokenSessionRepository;
+        _mfaTempTokenSessionRepository = mfaTempTokenSessionRepository;
         _auditService = auditService;
+        _jwtOptions = jwtOptions.Value;
     }
 
     public async Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken)
@@ -262,13 +273,40 @@ public class MfaService : IMfaService
             cancellationToken
         );
 
+        await _accessTokenSessionRepository.RevokeAllActiveByUserAsync(
+            user.Id,
+            "new_login",
+            cancellationToken
+        );
+        await _mfaTempTokenSessionRepository.RevokeAllActiveByUserAsync(
+            user.Id,
+            "new_login",
+            cancellationToken
+        );
+
+        var accessTokenJti = Guid.NewGuid().ToString("N");
+        var accessToken = _tokenService.CreateAccessToken(user, accessTokenJti);
+        var refreshToken = _tokenService.CreateRefreshToken();
+
+        await _accessTokenSessionRepository.AddAsync(
+            new AccessTokenSession
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                TokenJti = accessTokenJti,
+                IssuedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
+            },
+            cancellationToken
+        );
+
         return Result<LoginResponse>.Success(
             new LoginResponse
             {
                 Status = "Authenticated",
                 MfaRequired = false,
-                AccessToken = _tokenService.CreateAccessToken(user),
-                RefreshToken = _tokenService.CreateRefreshToken(),
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
                 ExpiresIn = 15 * 60,
             },
             "MFA verification succeeded."

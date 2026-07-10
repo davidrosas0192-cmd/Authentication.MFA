@@ -21,12 +21,13 @@ public class TokenService : ITokenService
         _mfaJwtOptions = mfaJwtOptions.Value;
     }
 
-    public string CreateAccessToken(User user)
+    public string CreateAccessToken(User user, string tokenJti)
     {
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
+            new(JwtRegisteredClaimNames.Jti, tokenJti),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
         };

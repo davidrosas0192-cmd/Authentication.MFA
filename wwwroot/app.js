@@ -18,6 +18,8 @@
     pendingFido2EnrollOptions: null,
     pendingFido2EnrollTransactionId: null,
     lastEnrollmentMethod: null,
+    selectedVerifyMethod: null,
+    selectedSetupMethod: null,
   };
 
   const refs = {
@@ -28,6 +30,7 @@
     accessTokenView: document.getElementById("accessTokenView"),
     mfaTokenView: document.getElementById("mfaTokenView"),
     clearSessionBtn: document.getElementById("clearSessionBtn"),
+    authActionBtn: document.getElementById("authActionBtn"),
     copyAccessBtn: document.getElementById("copyAccessBtn"),
     copyMfaBtn: document.getElementById("copyMfaBtn"),
     clearConsoleBtn: document.getElementById("clearConsoleBtn"),
@@ -49,9 +52,11 @@
 
     setupMfaCard: document.getElementById("setupMfaCard"),
     setupOptionsGrid: document.getElementById("setupOptionsGrid"),
+    setupEndpointsHint: document.getElementById("setupEndpointsHint"),
 
     mfaMethodsCard: document.getElementById("mfaMethodsCard"),
     mfaMethodsGrid: document.getElementById("mfaMethodsGrid"),
+    verifyEndpointsHint: document.getElementById("verifyEndpointsHint"),
 
     startMfaChallengeForm: document.getElementById("startMfaChallengeForm"),
     mfaChallengeCard: document.getElementById("mfaChallengeCard"),
@@ -101,6 +106,7 @@
     refs.exportConsoleBtn.addEventListener("click", exportLogs);
 
     refs.clearSessionBtn.addEventListener("click", clearSession);
+    refs.authActionBtn.addEventListener("click", onAuthAction);
     refs.copyAccessBtn.addEventListener("click", () => copyText(state.accessToken, "Access token copied."));
     refs.copyMfaBtn.addEventListener("click", () => copyText(state.mfaToken, "MFA token copied."));
 
@@ -156,6 +162,8 @@
     state.pendingFido2EnrollOptions = null;
     state.pendingFido2EnrollTransactionId = null;
     state.lastEnrollmentMethod = null;
+    state.selectedVerifyMethod = null;
+    state.selectedSetupMethod = null;
 
     persistState();
     render();
@@ -167,6 +175,8 @@
     renderTokens();
     renderMfaMethods();
     renderMfaSetupOptions();
+    renderEndpointHints();
+    renderFlowVisibility();
     renderTransactionFields();
   }
 
@@ -179,6 +189,17 @@
 
     refs.mfaTxBadge.className = `badge ${state.mfaTransactionId ? "warn" : "off"}`;
     refs.mfaTxBadge.textContent = `MFA Tx: ${state.mfaTransactionId || "None"}`;
+
+    if (state.accessToken) {
+      refs.authActionBtn.hidden = false;
+      refs.authActionBtn.textContent = "Logout";
+    } else if (state.mfaToken) {
+      refs.authActionBtn.hidden = false;
+      refs.authActionBtn.textContent = "Cancel Authentication";
+    } else {
+      refs.authActionBtn.hidden = true;
+      refs.authActionBtn.textContent = "Logout";
+    }
   }
 
   function renderTokens() {
@@ -193,7 +214,7 @@
 
   function renderMfaMethods() {
     const methods = (state.allowedMfaMethods || []).map((x) => (x || "").toLowerCase());
-    const show = !!state.mfaToken && methods.length > 0;
+    const show = !!state.mfaToken && !state.accessToken && methods.length > 0;
     refs.mfaMethodsCard.hidden = !show;
 
     refs.mfaMethodsGrid.innerHTML = "";
@@ -207,13 +228,25 @@
       btn.type = "button";
       btn.innerHTML = `<strong>${method.toUpperCase()}</strong><span>Select this method flow.</span>`;
       btn.addEventListener("click", () => {
+        state.selectedVerifyMethod = method;
+        state.selectedSetupMethod = null;
+
         if (method === "sms" || method === "email") {
           refs.challengeMethod.value = method;
           refs.challengeTx.value = state.mfaTransactionId || "";
           refs.verifyChallengeTx.value = state.mfaTransactionId || "";
-          logInfo(`${method.toUpperCase()} selected for MFA challenge.`);
         } else if (method === "fido2") {
-          logInfo("FIDO2 selected. Use the FIDO2 Login buttons below.");
+          refs.challengeTx.value = state.mfaTransactionId || "";
+          refs.verifyChallengeTx.value = state.mfaTransactionId || "";
+        }
+
+        persistState();
+        render();
+
+        if (method === "fido2") {
+          focusCard(refs.fido2LoginCard);
+        } else {
+          focusCard(refs.mfaChallengeCard);
         }
       });
       refs.mfaMethodsGrid.appendChild(btn);
@@ -239,17 +272,74 @@
       btn.innerHTML = `<strong>${label}</strong><span>Starts the enrollment flow with full token.</span>`;
 
       btn.addEventListener("click", () => {
+        state.selectedSetupMethod = method;
+        state.selectedVerifyMethod = null;
+
         if (method === "sms" || method === "email") {
           refs.enrollMethod.value = method;
           refs.enrollContact.focus();
-          logInfo(`${method.toUpperCase()} setup selected. Enter contact and start enrollment.`);
         } else if (method === "fido2") {
-          logInfo("FIDO2 setup selected. Create enrollment options, then complete enrollment.");
+          refs.enrollMethod.value = "sms";
+        }
+
+        persistState();
+        render();
+
+        if (method === "fido2") {
+          focusCard(refs.fido2EnrollmentCard);
+        } else {
+          focusCard(refs.mfaEnrollmentCard);
         }
       });
 
       refs.setupOptionsGrid.appendChild(btn);
     });
+  }
+
+  function renderEndpointHints() {
+    const verify = (state.selectedVerifyMethod || "").toLowerCase();
+    if (verify === "sms" || verify === "email") {
+      refs.verifyEndpointsHint.hidden = false;
+      refs.verifyEndpointsHint.innerHTML =
+        `<strong>Use these endpoints:</strong><br/><code>POST /api/mfa/challenges/start</code><br/><code>POST /api/mfa/challenges/verify</code>`;
+    } else if (verify === "fido2") {
+      refs.verifyEndpointsHint.hidden = false;
+      refs.verifyEndpointsHint.innerHTML =
+        `<strong>Use these endpoints:</strong><br/><code>POST /api/fido2/login/options</code><br/><code>POST /api/fido2/login/complete</code>`;
+    } else {
+      refs.verifyEndpointsHint.hidden = true;
+      refs.verifyEndpointsHint.innerHTML = "";
+    }
+
+    const setup = (state.selectedSetupMethod || "").toLowerCase();
+    if (setup === "sms" || setup === "email") {
+      refs.setupEndpointsHint.hidden = false;
+      refs.setupEndpointsHint.innerHTML =
+        `<strong>Use these endpoints:</strong><br/><code>POST /api/mfa/enrollment/start</code><br/><code>POST /api/mfa/enrollment/verify</code>`;
+    } else if (setup === "fido2") {
+      refs.setupEndpointsHint.hidden = false;
+      refs.setupEndpointsHint.innerHTML =
+        `<strong>Use these endpoints:</strong><br/><code>POST /api/fido2/enrollment/options</code><br/><code>POST /api/fido2/enrollment/complete</code>`;
+    } else {
+      refs.setupEndpointsHint.hidden = true;
+      refs.setupEndpointsHint.innerHTML = "";
+    }
+  }
+
+  function renderFlowVisibility() {
+    const hasFullToken = !!state.accessToken;
+    const hasMfaToken = !!state.mfaToken && !hasFullToken;
+
+    const selectedVerifyMethod = (state.selectedVerifyMethod || "").toLowerCase();
+    const selectedSetupMethod = (state.selectedSetupMethod || "").toLowerCase();
+
+    refs.mfaMethodsCard.hidden = !(hasMfaToken && (state.allowedMfaMethods || []).length > 0);
+    refs.mfaChallengeCard.hidden = !(hasMfaToken && (selectedVerifyMethod === "sms" || selectedVerifyMethod === "email"));
+    refs.fido2LoginCard.hidden = !(hasMfaToken && selectedVerifyMethod === "fido2");
+
+    refs.setupMfaCard.hidden = !(hasFullToken && (state.availableMfaSetupOptions || []).length > 0);
+    refs.mfaEnrollmentCard.hidden = !(hasFullToken && (selectedSetupMethod === "sms" || selectedSetupMethod === "email"));
+    refs.fido2EnrollmentCard.hidden = !(hasFullToken && selectedSetupMethod === "fido2");
   }
 
   function baseUrl() {
@@ -456,7 +546,8 @@
       state.accessToken = null;
       state.refreshToken = null;
       state.availableMfaSetupOptions = [];
-      logInfo("Login requires MFA. Pick one of the available methods.");
+      state.selectedVerifyMethod = null;
+      state.selectedSetupMethod = null;
       focusCard(refs.mfaMethodsCard);
     }
 
@@ -467,7 +558,8 @@
       state.mfaToken = null;
       state.mfaTransactionId = null;
       state.allowedMfaMethods = [];
-      logInfo("Login authenticated. Full token is available.");
+      state.selectedVerifyMethod = null;
+      state.selectedSetupMethod = null;
 
       if ((state.availableMfaSetupOptions || []).length > 0) {
         focusCard(refs.setupMfaCard);
@@ -478,6 +570,30 @@
 
     persistState();
     render();
+  }
+
+  async function onAuthAction() {
+    if (state.accessToken) {
+      beginAction("Logout");
+
+      try {
+        await apiCall("/api/auth/logout", "POST", {}, "full");
+      } finally {
+        clearSession();
+      }
+
+      return;
+    }
+
+    if (state.mfaToken) {
+      beginAction("Cancel Authentication");
+
+      try {
+        await apiCall("/api/auth/cancel-authentication", "POST", {}, "mfa");
+      } finally {
+        clearSession();
+      }
+    }
   }
 
   async function onStartMfaChallenge(event) {
@@ -518,8 +634,11 @@
     }
 
     hydrateAuthenticatedSession(result.data);
-    logInfo("MFA challenge verified. Full token was issued.");
-    focusCard(refs.mfaEnrollmentCard);
+    state.selectedSetupMethod = null;
+    state.selectedVerifyMethod = null;
+    persistState();
+    render();
+    focusCard(refs.setupMfaCard.hidden ? refs.loginCard : refs.setupMfaCard);
   }
 
   async function onFido2LoginOptions() {
@@ -538,8 +657,6 @@
     state.pendingFido2LoginTransactionId = result.data.transactionId;
     persistState();
     render();
-
-    logInfo("FIDO2 login options created. You can now complete login with your passkey.");
     focusCard(refs.fido2LoginCard);
   }
 
@@ -568,11 +685,11 @@
     hydrateAuthenticatedSession(result.data);
     state.pendingFido2LoginOptions = null;
     state.pendingFido2LoginTransactionId = null;
+    state.selectedSetupMethod = null;
+    state.selectedVerifyMethod = null;
     persistState();
     render();
-
-    logInfo("FIDO2 login complete. Full token was issued.");
-    focusCard(refs.fido2EnrollmentCard);
+    focusCard(refs.setupMfaCard.hidden ? refs.loginCard : refs.setupMfaCard);
   }
 
   async function onStartEnrollment(event) {
@@ -619,11 +736,14 @@
       state.availableMfaSetupOptions = (state.availableMfaSetupOptions || []).filter(
         (x) => x.toLowerCase() !== state.lastEnrollmentMethod
       );
+
+      if ((state.selectedSetupMethod || "").toLowerCase() === state.lastEnrollmentMethod.toLowerCase()) {
+        state.selectedSetupMethod = null;
+      }
     }
 
     persistState();
     render();
-    logInfo("MFA enrollment verified.");
     focusCard(refs.setupMfaCard.hidden ? refs.fido2EnrollmentCard : refs.setupMfaCard);
   }
 
@@ -639,8 +759,6 @@
     state.pendingFido2EnrollTransactionId = result.data.transactionId;
     persistState();
     render();
-
-    logInfo("FIDO2 enrollment options created.");
     focusCard(refs.fido2EnrollmentCard);
   }
 
@@ -655,6 +773,15 @@
     const credential = await navigator.credentials.create({ publicKey });
 
     const attestationResponse = window.WebAuthnHelpers.serializeAttestationCredential(credential);
+
+    // Defensive fallback in case an older cached serializer is loaded.
+    if (!attestationResponse.Response) {
+      attestationResponse.Response = {};
+    }
+
+    if (!Array.isArray(attestationResponse.Response.Transports) || attestationResponse.Response.Transports.length === 0) {
+      attestationResponse.Response.Transports = ["internal"];
+    }
 
     const payload = {
       transactionId: state.pendingFido2EnrollTransactionId,
@@ -671,11 +798,13 @@
     state.availableMfaSetupOptions = (state.availableMfaSetupOptions || []).filter(
       (x) => x.toLowerCase() !== "fido2"
     );
+    if ((state.selectedSetupMethod || "").toLowerCase() === "fido2") {
+      state.selectedSetupMethod = null;
+    }
 
     persistState();
     render();
-    logInfo("FIDO2 enrollment complete.");
-    focusCard(refs.mfaEnrollmentCard);
+    focusCard(refs.setupMfaCard.hidden ? refs.loginCard : refs.setupMfaCard);
   }
 
   function hydrateAuthenticatedSession(data) {
@@ -684,6 +813,8 @@
     state.mfaToken = null;
     state.mfaTransactionId = null;
     state.allowedMfaMethods = [];
+    state.selectedVerifyMethod = null;
+    state.selectedSetupMethod = null;
 
     if (Array.isArray(data.availableMfaSetupOptions)) {
       state.availableMfaSetupOptions = data.availableMfaSetupOptions;
@@ -695,11 +826,11 @@
 
   async function copyText(value, successMessage) {
     if (!value) {
-      logInfo("Nothing to copy.");
       return;
     }
 
     await navigator.clipboard.writeText(value);
+    void successMessage;
   }
 
   function beginAction(actionName) {
@@ -729,20 +860,17 @@
     refs.createUsername.value = username;
     refs.createEmail.value = `${username}@example.com`;
     refs.createPassword.value = "DemoPass123!";
-    logInfo("Sample user fields populated.");
   }
 
   function fillLoginFromLastCreated() {
     if (state.lastLoginUsername) {
       refs.loginUsername.value = state.lastLoginUsername;
       refs.loginPassword.value = refs.loginPassword.value || "DemoPass123!";
-      logInfo("Login form filled from last created username.");
       return;
     }
 
     refs.loginUsername.value = refs.createUsername.value || "";
     refs.loginPassword.value = refs.createPassword.value || refs.loginPassword.value;
-    logInfo("Login form filled from create user form values.");
   }
 
   function fillMfaChallengeFromSession() {
@@ -758,8 +886,6 @@
     if (method) {
       refs.challengeMethod.value = method.toLowerCase();
     }
-
-    logInfo("MFA challenge fields filled from current session.");
   }
 
   function fillEnrollmentSample() {
@@ -769,7 +895,6 @@
     } else {
       refs.enrollContact.value = "demo.user@example.com";
     }
-    logInfo(`Enrollment sample filled for ${method}.`);
   }
 
   window.addEventListener("unhandledrejection", (event) => {

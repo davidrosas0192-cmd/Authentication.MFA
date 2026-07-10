@@ -140,6 +140,18 @@ If those files were previously tracked, they must be removed from index once wit
 2. Complete assertion with the authenticator
 3. Receive JWT tokens after successful verification
 
+## Web test client
+
+The project serves a browser test client from the app root using static files in wwwroot.
+
+- Open the API base URL in the browser (for example https://localhost:xxxx/).
+- The client guides flows by token state:
+	- RequiresMfa: shows only registered verification methods.
+	- Authenticated with setup options: shows only enrollment setup options.
+- Selecting a method shows the exact endpoints to call for that method.
+
+See WWWROOT_CLIENT_PLAN.md for interaction details.
+
 ## Token rules
 
 - Full access token:
@@ -151,6 +163,8 @@ If those files were previously tracked, they must be removed from index once wit
 	- Used for MFA login challenge endpoints:
 		- /api/mfa/challenges/start
 		- /api/mfa/challenges/verify
+		- /api/fido2/login/options
+		- /api/fido2/login/complete
 	- Full access token is rejected on these endpoints
 
 ## Security notes

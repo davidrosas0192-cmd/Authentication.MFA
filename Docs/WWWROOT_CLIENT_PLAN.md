@@ -16,21 +16,25 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
    - fido2 passwordless
 4. When login returns `RequiresMfa`, the endpoint must include `AllowedMfaMethods`, and the client must store that list.
 5. Show a method/device selection screen based on `AllowedMfaMethods`.
-6. From that screen, let the user choose a verification mechanism (sms, email, or fido2) and start the proper flow.
-7. Support MFA challenge flow with MFA temp token:
+6. From that screen, once a method is selected, hide non-selected verification flows and show only the relevant flow card.
+7. When fully authenticated, hide verification-method selection and show only setup/enrollment options.
+8. After selecting a setup option, hide non-selected enrollment flows and show only the relevant enrollment card.
+9. Show endpoint guidance after method selection, listing the exact endpoints to call.
+10. Support MFA challenge flow with MFA temp token:
    - start challenge
    - verify challenge
-8. Support FIDO2 login challenge flow with MFA temp token:
+11. Support FIDO2 login challenge flow with MFA temp token:
    - create options
    - complete login
-9. Allow enrollment only when fully authenticated (full access token):
+12. Allow enrollment only when fully authenticated (full access token):
    - MFA enrollment (start/verify)
    - FIDO2 enrollment (options/complete)
-10. Show API responses in a visible response box with:
+13. Show API responses in a visible response box with:
    - timestamp
    - endpoint/method
    - status code
    - formatted JSON body
+14. Keep console output scoped to the current action button (new action clears prior console entries).
 
 ## Proposed UX
 
@@ -45,14 +49,17 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
    - card list from `AllowedMfaMethods`
    - each card explains which endpoint is called
    - CTA per method: `Use SMS`, `Use Email`, `Use FIDO2`
+   - after selection, only the chosen verification flow remains visible
 4. MFA setup screen for authenticated users without configured MFA:
    - activated when `AvailableMfaSetupOptions` has values
    - shows three cards: `Setup SMS`, `Setup Email`, `Setup FIDO2 Passwordless`
    - uses full token to start enrollment
+   - after selection, only the chosen enrollment flow remains visible
 5. Utility actions:
    - clear console
    - clear session
    - copy token
+   - export console JSON
 6. Clear messaging:
    - required field validation
    - network error handling
@@ -69,6 +76,8 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
    - HTTP client (fetch)
    - endpoint -> required token mapping
    - `AllowedMfaMethods`/`AvailableMfaSetupOptions` -> UI screen/action mapping
+   - state-driven card visibility (selected flow only)
+   - endpoint hints per selected method
    - response box rendering
 4. `wwwroot/webauthn.js`
    - base64url <-> ArrayBuffer conversions
@@ -93,11 +102,15 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 2. Login (`POST /api/auth/login`).
 3. If `Authenticated` and `AvailableMfaSetupOptions` has values:
    - show MFA setup screen with `sms`, `email`, `fido2`
+   - after selection, show only the selected enrollment flow
+   - show endpoints for the selected enrollment method
    - run selected enrollment flow with full token
 4. If `RequiresMfa`:
    - read `AllowedMfaMethods`
    - show available method/device selection screen
 5. User selects a method:
+   - show only the selected verification flow
+   - show endpoints for the selected verification method
    - use MFA temp token for:
      - `POST /api/mfa/challenges/start`
      - `POST /api/mfa/challenges/verify`
@@ -125,6 +138,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 5. MFA temp token can be used to complete MFA or FIDO2 login.
 6. After full authentication, enrollment flows are enabled.
 7. Every API call is clearly logged in the response box.
+8. Console output is scoped to the currently triggered action.
 
 ## Implementation Phases
 
@@ -136,3 +150,8 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 6. Phase 6: FIDO2 login flow.
 7. Phase 7: MFA and FIDO2 enrollment with full token.
 8. Phase 8: UX polish, validation, and manual end-to-end testing.
+
+## Current implementation status
+
+- Implemented: state-driven visibility, endpoint hints, action-scoped logs, responsive console rendering, sample fillers, and JSON export.
+- Remaining enhancements are optional UX refinements only.

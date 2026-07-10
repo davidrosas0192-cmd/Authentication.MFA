@@ -5,9 +5,11 @@ using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.DTOs.Auth;
 using Authentication.Fido2.DTOs.Fido2;
 using Authentication.Fido2.Entities;
+using Authentication.Fido2.Options;
 using Authentication.Fido2.Services.Interfaces;
 using Fido2NetLib;
 using Fido2NetLib.Objects;
+using Microsoft.Extensions.Options;
 
 namespace Authentication.Fido2.Services.Implementations;
 
@@ -18,7 +20,10 @@ public class Fido2MfaService : IFido2MfaService
     private readonly IFido2CredentialRepository _credentialRepository;
     private readonly IFido2TransactionRepository _transactionRepository;
     private readonly ITokenService _tokenService;
+    private readonly IAccessTokenSessionRepository _accessTokenSessionRepository;
+    private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly IAuditService _auditService;
+    private readonly JwtOptions _jwtOptions;
 
     public Fido2MfaService(
         IFido2 fido2,
@@ -26,7 +31,10 @@ public class Fido2MfaService : IFido2MfaService
         IFido2CredentialRepository credentialRepository,
         IFido2TransactionRepository transactionRepository,
         ITokenService tokenService,
-        IAuditService auditService
+        IAccessTokenSessionRepository accessTokenSessionRepository,
+        IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
+        IAuditService auditService,
+        IOptions<JwtOptions> jwtOptions
     )
     {
         _fido2 = fido2 ?? throw new ArgumentNullException(nameof(fido2));
@@ -36,7 +44,14 @@ public class Fido2MfaService : IFido2MfaService
         _transactionRepository =
             transactionRepository ?? throw new ArgumentNullException(nameof(transactionRepository));
         _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
+        _accessTokenSessionRepository =
+            accessTokenSessionRepository
+            ?? throw new ArgumentNullException(nameof(accessTokenSessionRepository));
+        _mfaTempTokenSessionRepository =
+            mfaTempTokenSessionRepository
+            ?? throw new ArgumentNullException(nameof(mfaTempTokenSessionRepository));
         _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
+        _jwtOptions = jwtOptions.Value;
     }
 
     public async Task<Result<Fido2OptionsResponse>> CreateEnrollmentOptionsAsync(
@@ -525,8 +540,32 @@ public class Fido2MfaService : IFido2MfaService
 
         await _userRepository.UpdateAsync(user, cancellationToken);
 
-        var accessToken = _tokenService.CreateAccessToken(user);
+        await _accessTokenSessionRepository.RevokeAllActiveByUserAsync(
+            user.Id,
+            "new_login",
+            cancellationToken
+        );
+        await _mfaTempTokenSessionRepository.RevokeAllActiveByUserAsync(
+            user.Id,
+            "new_login",
+            cancellationToken
+        );
+
+        var accessTokenJti = Guid.NewGuid().ToString("N");
+        var accessToken = _tokenService.CreateAccessToken(user, accessTokenJti);
         var refreshToken = _tokenService.CreateRefreshToken();
+
+        await _accessTokenSessionRepository.AddAsync(
+            new AccessTokenSession
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                TokenJti = accessTokenJti,
+                IssuedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
+            },
+            cancellationToken
+        );
 
         await _auditService.TrackAuthenticationEventAsync(
             user.Id,

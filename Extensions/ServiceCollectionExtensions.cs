@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFido2CredentialRepository, Fido2CredentialRepository>();
         services.AddScoped<IFido2TransactionRepository, Fido2TransactionRepository>();
         services.AddScoped<IMfaTempTokenSessionRepository, MfaTempTokenSessionRepository>();
+        services.AddScoped<IAccessTokenSessionRepository, AccessTokenSessionRepository>();
         services.AddScoped<IUserMfaMethodRepository, UserMfaMethodRepository>();
         services.AddScoped<IMfaChallengeRepository, MfaChallengeRepository>();
         services.AddScoped<ITokenService, TokenService>();

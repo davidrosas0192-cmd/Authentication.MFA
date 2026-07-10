@@ -7,4 +7,6 @@ public interface IMfaTempTokenSessionRepository
     Task AddAsync(MfaTempTokenSession session, CancellationToken cancellationToken);
     Task<MfaTempTokenSession?> GetActiveByJtiAsync(string tokenJti, CancellationToken cancellationToken);
     Task ConsumeByTransactionAsync(Guid mfaTransactionId, CancellationToken cancellationToken);
+    Task RevokeByJtiAsync(string tokenJti, string reason, CancellationToken cancellationToken);
+    Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken);
 }

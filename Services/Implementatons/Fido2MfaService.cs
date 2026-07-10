@@ -180,6 +180,7 @@ public class Fido2MfaService : IFido2MfaService
 
     public async Task<Result<string>> CompleteEnrollmentAsync(
         CompleteFido2EnrollmentRequest request,
+        long userId,
         CancellationToken cancellationToken
     )
     {
@@ -205,6 +206,24 @@ public class Fido2MfaService : IFido2MfaService
             );
 
             return validationResult;
+        }
+
+        if (transaction!.UserId != userId)
+        {
+            await _auditService.TrackAuthenticationEventAsync(
+                transaction.UserId,
+                null,
+                "fido2_enrollment_complete",
+                "fido2",
+                false,
+                "Transaction user does not match token user",
+                cancellationToken
+            );
+
+            return Result<string>.Failure(
+                "Invalid FIDO2 transaction context.",
+                StatusCodes.Status401Unauthorized
+            );
         }
 
         var options = CredentialCreateOptions.FromJson(transaction!.OptionsJson);

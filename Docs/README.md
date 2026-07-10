@@ -191,6 +191,7 @@ See [WWWROOT_CLIENT_PLAN.md](./WWWROOT_CLIENT_PLAN.md) for interaction details.
 - [Architecture](./ARCHITECTURE.md)
 - [Database Schema Reference](./DATABASE_SCHEMA.md)
 - [OWASP Audit Plan](./OWASP_AUDIT_PLAN.md)
+- [OWASP Pen Test Checklist](./OWASP_PEN_TEST_CHECKLIST.md)
 - [Twilio MFA Implementation Plan](./TWILIO_MFA_IMPLEMENTATION_PLAN.md)
 - [MFA Enrollment Guide](./MFA_ENROLLMENT_GUIDE.md)
 - [API Endpoint Flow Guide](./API_ENDPOINT_FLOW_GUIDE.md)

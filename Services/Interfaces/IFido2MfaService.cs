@@ -15,6 +15,7 @@ public interface IFido2MfaService
 
     Task<Result<string>> CompleteEnrollmentAsync(
         CompleteFido2EnrollmentRequest request,
+        long userId,
         CancellationToken cancellationToken
     );
 

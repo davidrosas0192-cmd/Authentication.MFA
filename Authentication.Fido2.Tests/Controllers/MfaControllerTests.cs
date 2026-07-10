@@ -15,8 +15,9 @@ public class MfaControllerTests
     public async Task GetMethods_ReturnsAllowedMethods_WhenUserIsValid()
     {
         var service = new RecordingMfaService { AllowedMethodsToReturn = ["sms", "fido2"] };
+        var auditService = new RecordingAuditService();
 
-        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), NullLogger<MfaController>.Instance)
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), auditService, NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -34,7 +35,7 @@ public class MfaControllerTests
     [Fact]
     public async Task GetMethods_ReturnsUnauthorized_WhenTokenIsMissing()
     {
-        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), NullLogger<MfaController>.Instance)
+        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };
@@ -52,8 +53,9 @@ public class MfaControllerTests
             AllowedMethodsToReturn = ["sms"],
             AvailableSetupMethodsToReturn = ["email", "fido2"],
         };
+        var auditService = new RecordingAuditService();
 
-        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), NullLogger<MfaController>.Instance)
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), auditService, NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -72,7 +74,7 @@ public class MfaControllerTests
     [Fact]
     public async Task GetDevicesAvailable_ReturnsUnauthorized_WhenTokenIsMissing()
     {
-        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), NullLogger<MfaController>.Instance)
+        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };
@@ -109,8 +111,9 @@ public class MfaControllerTests
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
         },
         };
+        var auditService = new RecordingAuditService();
 
-        var controller = new MfaController(service, repo, NullLogger<MfaController>.Instance)
+        var controller = new MfaController(service, repo, auditService, NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -136,7 +139,7 @@ public class MfaControllerTests
         var repo = new RecordingMfaTempTokenSessionRepository();
 
         var service = new RecordingMfaService();
-        var controller = new MfaController(service, repo, NullLogger<MfaController>.Instance)
+        var controller = new MfaController(service, repo, new RecordingAuditService(), NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -177,7 +180,7 @@ public class MfaControllerTests
         },
         };
 
-        var controller = new MfaController(service, repo, NullLogger<MfaController>.Instance)
+        var controller = new MfaController(service, repo, new RecordingAuditService(), NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -196,7 +199,7 @@ public class MfaControllerTests
     [Fact]
     public async Task VerifyChallenge_ReturnsUnauthorized_WhenMfaTokenIsInvalid()
     {
-        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), NullLogger<MfaController>.Instance)
+        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };
@@ -219,8 +222,9 @@ public class MfaControllerTests
                 ExpiresAtUtc = DateTime.UtcNow,
             }),
         };
+        var auditService = new RecordingAuditService();
 
-        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), NullLogger<MfaController>.Instance)
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), auditService, NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -238,7 +242,7 @@ public class MfaControllerTests
     [Fact]
     public async Task StartEnrollment_ReturnsUnauthorized_WhenTokenIsMissing()
     {
-        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), NullLogger<MfaController>.Instance)
+        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };
@@ -259,8 +263,9 @@ public class MfaControllerTests
                 IsVerified = true,
             }),
         };
+        var auditService = new RecordingAuditService();
 
-        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), NullLogger<MfaController>.Instance)
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), auditService, NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -277,7 +282,7 @@ public class MfaControllerTests
     [Fact]
     public async Task VerifyEnrollment_ReturnsUnauthorized_WhenTokenIsMissing()
     {
-        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), NullLogger<MfaController>.Instance)
+        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };

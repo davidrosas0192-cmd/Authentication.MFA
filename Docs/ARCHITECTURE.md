@@ -95,6 +95,7 @@ Key files:
 Security/authentication auditing is implemented through explicit audit records written by AuditService.
 
 - Tables: AuthenticationAuditEvents, SecurityAuditEvents
+- Coverage includes login, logout, MFA challenge and enrollment flows, public user creation, and security-relevant read paths such as MFA method discovery.
 
 ## Domain entities
 
@@ -151,6 +152,8 @@ Security/authentication auditing is implemented through explicit audit records w
 ## FIDO2 Enrollment/Login
 
 FIDO2 flows remain available through Fido2Controller and Fido2MfaService.
+
+FIDO2 enrollment completion is validated against the authenticated user that created the transaction, so enrollment cannot be completed from a different account context.
 
 ## Configuration sections
 

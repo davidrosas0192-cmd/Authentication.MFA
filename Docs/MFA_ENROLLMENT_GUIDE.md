@@ -23,6 +23,8 @@ This guide describes the MFA enrollment options currently available in the REST 
 3. Client completes attestation and sends payload to `POST /api/fido2/enrollment/complete`.
 4. FIDO2 credential is stored and the user FIDO2 capability remains available.
 
+The completion step is bound to the authenticated user that created the transaction, so the enrollment cannot be finalized from a different account context.
+
 ## SMS/Email Enrollment (implemented)
 
 ### Start Enrollment
@@ -101,6 +103,7 @@ After full authentication:
 - Server resolves transaction context from `mfa_tx` claim + active MFA token session.
 
 - Full access token is issued after MFA verification succeeds.
+- MFA method discovery and device availability requests are audited for security review.
 
 ## Required configuration
 

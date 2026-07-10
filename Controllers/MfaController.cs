@@ -17,16 +17,19 @@ public class MfaController : ControllerBase
 {
     private readonly IMfaService _mfaService;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
+    private readonly IAuditService _auditService;
     private readonly ILogger<MfaController> _logger;
 
     public MfaController(
         IMfaService mfaService,
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
+        IAuditService auditService,
         ILogger<MfaController> logger
     )
     {
         _mfaService = mfaService;
         _mfaTempTokenSessionRepository = mfaTempTokenSessionRepository;
+        _auditService = auditService;
         _logger = logger;
     }
 
@@ -38,10 +41,33 @@ public class MfaController : ControllerBase
         {
             if (!TryGetUserId(User, out var userId))
             {
+                await _auditService.TrackSecurityEventAsync(
+                    "Authentication",
+                    "auth.mfa.methods.read",
+                    "Warning",
+                    false,
+                    null,
+                    null,
+                    "Invalid token",
+                    null,
+                    cancellationToken
+                );
                 return Unauthorized(new { message = "Invalid token." });
             }
 
             var methods = await _mfaService.GetAllowedMethodsAsync(userId, cancellationToken);
+
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.mfa.methods.read",
+                "Information",
+                true,
+                userId,
+                null,
+                null,
+                new { allowedCount = methods.Count },
+                cancellationToken
+            );
 
             return ToActionResult(
                 Result<MfaMethodsResponse>.Success(new MfaMethodsResponse { AllowedMfaMethods = methods })
@@ -63,6 +89,17 @@ public class MfaController : ControllerBase
         {
             if (!TryGetUserId(User, out var userId))
             {
+                await _auditService.TrackSecurityEventAsync(
+                    "Authentication",
+                    "auth.mfa.devices.available",
+                    "Warning",
+                    false,
+                    null,
+                    null,
+                    "Invalid token",
+                    null,
+                    cancellationToken
+                );
                 return Unauthorized(new { message = "Invalid token." });
             }
 
@@ -253,6 +290,18 @@ public class MfaController : ControllerBase
             || string.IsNullOrWhiteSpace(tokenJti)
         )
         {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.mfa.token_validation",
+                "Warning",
+                false,
+                null,
+                null,
+                "Invalid MFA token",
+                null,
+                cancellationToken
+            );
+
             return (0, Guid.Empty, Unauthorized(new { message = "Invalid MFA token." }));
         }
 
@@ -263,6 +312,18 @@ public class MfaController : ControllerBase
 
         if (tokenSession is null || tokenSession.UserId != userId || tokenSession.MfaTransactionId != mfaTransactionId)
         {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.mfa.token_validation",
+                "Warning",
+                false,
+                userId,
+                null,
+                "MFA token expired or not valid",
+                new { tokenJti, mfaTransactionId },
+                cancellationToken
+            );
+
             return (0, Guid.Empty, Unauthorized(new { message = "MFA token is expired or not valid." }));
         }
 

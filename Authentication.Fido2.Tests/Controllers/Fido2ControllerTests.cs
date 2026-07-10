@@ -23,8 +23,9 @@ public class Fido2ControllerTests
                 Options = new { challenge = "abc" },
             }),
         };
+        var auditService = new RecordingAuditService();
 
-        var controller = new Fido2Controller(service, new RecordingMfaTempTokenSessionRepository(), NullLogger<Fido2Controller>.Instance)
+        var controller = new Fido2Controller(service, new RecordingMfaTempTokenSessionRepository(), auditService, NullLogger<Fido2Controller>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -43,7 +44,7 @@ public class Fido2ControllerTests
     [Fact]
     public async Task CreateEnrollmentOptions_ReturnsUnauthorized_WhenTokenIsMissing()
     {
-        var controller = new Fido2Controller(new RecordingFido2MfaService(), new RecordingMfaTempTokenSessionRepository(), NullLogger<Fido2Controller>.Instance)
+        var controller = new Fido2Controller(new RecordingFido2MfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<Fido2Controller>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };
@@ -60,8 +61,9 @@ public class Fido2ControllerTests
         {
             CompleteEnrollmentResultToReturn = Result<string>.Success("ok"),
         };
+        var auditService = new RecordingAuditService();
 
-        var controller = new Fido2Controller(service, new RecordingMfaTempTokenSessionRepository(), NullLogger<Fido2Controller>.Instance)
+        var controller = new Fido2Controller(service, new RecordingMfaTempTokenSessionRepository(), auditService, NullLogger<Fido2Controller>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -78,14 +80,14 @@ public class Fido2ControllerTests
     [Fact]
     public async Task CompleteEnrollment_ReturnsUnauthorized_WhenTokenIsMissing()
     {
-        var controller = new Fido2Controller(new RecordingFido2MfaService(), new RecordingMfaTempTokenSessionRepository(), NullLogger<Fido2Controller>.Instance)
+        var controller = new Fido2Controller(new RecordingFido2MfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<Fido2Controller>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };
 
         var result = await controller.CompleteEnrollment(new CompleteFido2EnrollmentRequest { TransactionId = Guid.NewGuid(), AttestationResponse = new AuthenticatorAttestationRawResponse() }, CancellationToken.None);
 
-        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.IsType<UnauthorizedObjectResult>(result);
     }
 
     [Fact]
@@ -101,6 +103,7 @@ public class Fido2ControllerTests
                 Options = new { challenge = "abc" },
             }),
         };
+        var auditService = new RecordingAuditService();
 
         var repo = new RecordingMfaTempTokenSessionRepository
         {
@@ -114,7 +117,7 @@ public class Fido2ControllerTests
         },
         };
 
-        var controller = new Fido2Controller(service, repo, NullLogger<Fido2Controller>.Instance)
+        var controller = new Fido2Controller(service, repo, auditService, NullLogger<Fido2Controller>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -133,7 +136,7 @@ public class Fido2ControllerTests
     [Fact]
     public async Task CreateLoginOptions_ReturnsUnauthorized_WhenMfaTokenIsMissing()
     {
-        var controller = new Fido2Controller(new RecordingFido2MfaService(), new RecordingMfaTempTokenSessionRepository(), NullLogger<Fido2Controller>.Instance)
+        var controller = new Fido2Controller(new RecordingFido2MfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<Fido2Controller>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };
@@ -157,6 +160,7 @@ public class Fido2ControllerTests
                 RefreshToken = "refresh-token",
             }),
         };
+        var auditService = new RecordingAuditService();
 
         var repo = new RecordingMfaTempTokenSessionRepository
         {
@@ -170,7 +174,7 @@ public class Fido2ControllerTests
         },
         };
 
-        var controller = new Fido2Controller(service, repo, NullLogger<Fido2Controller>.Instance)
+        var controller = new Fido2Controller(service, repo, auditService, NullLogger<Fido2Controller>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -188,7 +192,7 @@ public class Fido2ControllerTests
     [Fact]
     public async Task CompleteLogin_ReturnsUnauthorized_WhenMfaTokenIsMissing()
     {
-        var controller = new Fido2Controller(new RecordingFido2MfaService(), new RecordingMfaTempTokenSessionRepository(), NullLogger<Fido2Controller>.Instance)
+        var controller = new Fido2Controller(new RecordingFido2MfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<Fido2Controller>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };

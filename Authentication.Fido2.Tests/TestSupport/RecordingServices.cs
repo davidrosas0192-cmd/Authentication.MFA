@@ -32,6 +32,42 @@ internal sealed class RecordingUserRegistrationService : IUserRegistrationServic
     }
 }
 
+internal sealed class RecordingAuditService : IAuditService
+{
+    public int AuthenticationEventCallCount { get; private set; }
+    public int SecurityEventCallCount { get; private set; }
+
+    public Task TrackAuthenticationEventAsync(
+        long? userId,
+        string? usernameOrEmail,
+        string stage,
+        string method,
+        bool isSuccess,
+        string? failureReason,
+        CancellationToken cancellationToken
+    )
+    {
+        AuthenticationEventCallCount++;
+        return Task.CompletedTask;
+    }
+
+    public Task TrackSecurityEventAsync(
+        string category,
+        string eventType,
+        string severity,
+        bool isSuccess,
+        long? userId,
+        string? usernameOrEmail,
+        string? failureReason,
+        object? details,
+        CancellationToken cancellationToken
+    )
+    {
+        SecurityEventCallCount++;
+        return Task.CompletedTask;
+    }
+}
+
 internal sealed class RecordingAuthService : IAuthService
 {
     public int LoginCallCount { get; private set; }
@@ -222,10 +258,11 @@ internal sealed class RecordingFido2MfaService : IFido2MfaService
         return Task.FromResult(CreateEnrollmentOptionsResultToReturn);
     }
 
-    public Task<Result<string>> CompleteEnrollmentAsync(CompleteFido2EnrollmentRequest request, CancellationToken cancellationToken)
+    public Task<Result<string>> CompleteEnrollmentAsync(CompleteFido2EnrollmentRequest request, long userId, CancellationToken cancellationToken)
     {
         CompleteEnrollmentCallCount++;
         LastCompleteEnrollmentRequest = request;
+        LastUserId = userId;
         return Task.FromResult(CompleteEnrollmentResultToReturn);
     }
 

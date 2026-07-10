@@ -34,19 +34,20 @@ All controller responses follow this shape:
 
 ## Endpoint Index
 
-1. `POST /api/auth/login`
-2. `POST /api/auth/logout` (`Authorize: access token`)
-3. `POST /api/auth/cancel-authentication` (`Authorize: mfa token`)
-4. `GET /api/mfa/methods` (`Authorize: access token`)
-5. `GET /api/mfa/devices/available` (`Authorize: access token`)
-6. `POST /api/mfa/enrollment/start` (`Authorize: access token`)
-7. `POST /api/mfa/enrollment/verify` (`Authorize: access token`)
-8. `POST /api/mfa/challenges/start` (`Authorize: mfa token`)
-9. `POST /api/mfa/challenges/verify` (`Authorize: mfa token`)
-10. `POST /api/fido2/enrollment/options` (`Authorize: access token`)
-11. `POST /api/fido2/enrollment/complete` (`Authorize: access token`)
-12. `POST /api/fido2/login/options` (`Authorize: mfa token`)
-13. `POST /api/fido2/login/complete` (`Authorize: mfa token`)
+1. `POST /api/users`
+2. `POST /api/auth/login`
+3. `POST /api/auth/logout` (`Authorize: access token`)
+4. `POST /api/auth/cancel-authentication` (`Authorize: mfa token`)
+5. `GET /api/mfa/methods` (`Authorize: access token`)
+6. `GET /api/mfa/devices/available` (`Authorize: access token`)
+7. `POST /api/mfa/enrollment/start` (`Authorize: access token`)
+8. `POST /api/mfa/enrollment/verify` (`Authorize: access token`)
+9. `POST /api/mfa/challenges/start` (`Authorize: mfa token`)
+10. `POST /api/mfa/challenges/verify` (`Authorize: mfa token`)
+11. `POST /api/fido2/enrollment/options` (`Authorize: access token`)
+12. `POST /api/fido2/enrollment/complete` (`Authorize: access token`)
+13. `POST /api/fido2/login/options` (`Authorize: mfa token`)
+14. `POST /api/fido2/login/complete` (`Authorize: mfa token`)
 
 ## REST Alignment
 
@@ -76,6 +77,36 @@ The API follows REST principles where practical for authentication workflows.
 - `POST /api/auth/cancel-authentication` revokes the current MFA temp token session.
 
 ## 1) Password Login Entry Point
+
+### `POST /api/users`
+
+Request:
+
+```json
+{
+  "username": "cruzrx2",
+  "email": "davidrosas0192@gmail.com",
+  "password": "Rdavid58!"
+}
+```
+
+Possible outcomes:
+
+1. User created successfully:
+- `data.userId` present
+- `data.username` and `data.email` echoed back
+
+2. Validation or conflict failure:
+- `400` for invalid input
+- `409` or `400` for duplicate user conditions depending on service implementation
+
+Security notes:
+- Treat user creation as a public endpoint subject to rate limiting and abuse monitoring.
+- Do not leak whether the username or email already exists beyond a generic validation/conflict response.
+
+Audit expectations:
+- Log request source, outcome, and correlation id.
+- Never log plaintext passwords.
 
 ### `POST /api/auth/login`
 
@@ -311,6 +342,7 @@ Request shape:
 
 Note:
 - `attestationResponse` is produced by browser WebAuthn APIs and should be forwarded as-is.
+- Enrollment completion is validated server-side against the authenticated user that created the transaction.
 
 ## 7) FIDO2 Login Flow
 
@@ -389,6 +421,16 @@ Note:
 - Invalid OTP code -> `401`
 - Method not enabled for user -> `400`
 - Invalid token on protected endpoints -> `401`
+- User creation validation or conflict -> `400` or `409`
+- Public endpoint abuse or rate limit violation -> `429`
+
+## Audit Expectations
+
+- Every endpoint should emit a security or authentication audit event when the action is security-relevant.
+- Login, logout, cancel-authentication, public user creation, MFA method discovery, MFA start/verify, enrollment start/verify, and FIDO2 option/complete flows should all be traceable by `CorrelationId`.
+- Audit payloads must not contain passwords, OTP codes, bearer tokens, or raw WebAuthn assertions/attestations.
+- Failed authentication and authorization checks should still be auditable.
+- Public user creation should be auditable and rate limited.
 
 ## Setup Checklist Before Testing
 

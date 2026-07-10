@@ -16,17 +16,20 @@ public class Fido2Controller : ControllerBase
 {
     private readonly IFido2MfaService _fido2MfaService;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
+    private readonly IAuditService _auditService;
 
     private readonly ILogger<Fido2Controller> _logger;
 
     public Fido2Controller(
         IFido2MfaService fido2MfaService,
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
+        IAuditService auditService,
         ILogger<Fido2Controller> logger
     )
     {
         _fido2MfaService = fido2MfaService;
         _mfaTempTokenSessionRepository = mfaTempTokenSessionRepository;
+        _auditService = auditService;
 
         _logger = logger;
     }
@@ -40,6 +43,17 @@ public class Fido2Controller : ControllerBase
         {
             if (!TryGetUserId(User, out var userId))
             {
+                await _auditService.TrackSecurityEventAsync(
+                    "Authentication",
+                    "auth.fido2.enrollment.options",
+                    "Warning",
+                    false,
+                    null,
+                    null,
+                    "Invalid token",
+                    null,
+                    cancellationToken
+                );
                 return Unauthorized(new { message = "Invalid token." });
             }
 
@@ -56,7 +70,7 @@ public class Fido2Controller : ControllerBase
         {
             _logger.LogError(ex, "An error occurred creating FIDO2 enrollment options.");
 
-            return BadRequest(new { message = ex.Message });
+            return Problem("An error occurred while creating FIDO2 enrollment options.");
         }
     }
 
@@ -70,8 +84,26 @@ public class Fido2Controller : ControllerBase
     {
         try
         {
+            if (!TryGetUserId(User, out var userId))
+            {
+                await _auditService.TrackSecurityEventAsync(
+                    "Authentication",
+                    "auth.fido2.enrollment.complete",
+                    "Warning",
+                    false,
+                    null,
+                    null,
+                    "Invalid token",
+                    null,
+                    cancellationToken
+                );
+
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
             var response = await _fido2MfaService.CompleteEnrollmentAsync(
                 request,
+                userId,
                 cancellationToken
             );
 
@@ -81,7 +113,7 @@ public class Fido2Controller : ControllerBase
         {
             _logger.LogError(ex, "An error occurred completing FIDO2 enrollment.");
 
-            return BadRequest(new { message = ex.Message });
+            return Problem("An error occurred while completing FIDO2 enrollment.");
         }
     }
 
@@ -115,7 +147,7 @@ public class Fido2Controller : ControllerBase
         {
             _logger.LogError(ex, "An error occurred creating FIDO2 login options.");
 
-            return BadRequest(new { message = ex.Message });
+            return Problem("An error occurred while creating FIDO2 login options.");
         }
     }
 
@@ -156,13 +188,13 @@ public class Fido2Controller : ControllerBase
         {
             _logger.LogWarning(ex, "Unauthorized FIDO2 login attempt.");
 
-            return Unauthorized(new { message = ex.Message });
+            return Unauthorized(new { message = "Invalid MFA token." });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "An error occurred completing FIDO2 login.");
 
-            return BadRequest(new { message = ex.Message });
+            return Problem("An error occurred while completing FIDO2 login.");
         }
     }
 
@@ -194,6 +226,18 @@ public class Fido2Controller : ControllerBase
             || string.IsNullOrWhiteSpace(tokenJti)
         )
         {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.fido2.mfa_token_validation",
+                "Warning",
+                false,
+                null,
+                null,
+                "Invalid MFA token",
+                null,
+                cancellationToken
+            );
+
             return (0, Guid.Empty, Unauthorized(new { message = "Invalid MFA token." }));
         }
 
@@ -204,6 +248,18 @@ public class Fido2Controller : ControllerBase
 
         if (tokenSession is null || tokenSession.UserId != userId || tokenSession.MfaTransactionId != mfaTransactionId)
         {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.fido2.mfa_token_validation",
+                "Warning",
+                false,
+                userId,
+                null,
+                "MFA token expired or not valid",
+                new { tokenJti, mfaTransactionId },
+                cancellationToken
+            );
+
             return (0, Guid.Empty, Unauthorized(new { message = "MFA token is expired or not valid." }));
         }
 

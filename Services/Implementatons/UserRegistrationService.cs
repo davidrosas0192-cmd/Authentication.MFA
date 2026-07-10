@@ -26,6 +26,18 @@ public class UserRegistrationService : IUserRegistrationService
     {
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.user.create",
+                "Warning",
+                false,
+                null,
+                request.Username,
+                "Missing required fields",
+                new { ipAddress, userAgent },
+                cancellationToken
+            );
+
             return Result<CreateUserResponse>.Failure("Username, email and password are required.", StatusCodes.Status400BadRequest);
         }
 
@@ -35,12 +47,36 @@ public class UserRegistrationService : IUserRegistrationService
         var existingByUsername = await _userRepository.GetByUsernameAsync(normalizedUsername, cancellationToken);
         if (existingByUsername is not null)
         {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.user.create",
+                "Warning",
+                false,
+                existingByUsername.Id,
+                normalizedUsername,
+                "Username already exists",
+                new { ipAddress, userAgent },
+                cancellationToken
+            );
+
             return Result<CreateUserResponse>.Failure("Username already exists.", StatusCodes.Status409Conflict);
         }
 
         var existingByEmail = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
         if (existingByEmail is not null)
         {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.user.create",
+                "Warning",
+                false,
+                existingByEmail.Id,
+                normalizedEmail,
+                "Email already exists",
+                new { ipAddress, userAgent },
+                cancellationToken
+            );
+
             return Result<CreateUserResponse>.Failure("Email already exists.", StatusCodes.Status409Conflict);
         }
 

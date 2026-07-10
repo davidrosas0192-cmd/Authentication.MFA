@@ -7,6 +7,7 @@ Implement a secure authentication flow where:
 - Public user registration is allowed.
 - Password login returns an MFA temporary token when MFA is required.
 - MFA challenge endpoints and FIDO2 login endpoints require the MFA temporary token.
+- SMS/Email challenge payload no longer sends mfaTransactionId; transaction context is token-driven.
 - Enrollment endpoints remain protected by full access token.
 - OWASP-aligned auditing is captured for critical steps.
 
@@ -48,6 +49,7 @@ flowchart TD
     L --> P
 
     P --> Q[Issue full access token]
+    Q --> T[GET /api/mfa/devices/available]
 
     E --> R[Authorized enrollment endpoints]
     Q --> R
@@ -59,6 +61,7 @@ flowchart TD
 - Short-lived MFA token with transaction binding.
 - Replay resistance by consuming token sessions on successful verification.
 - Context checks: user id, token type, jti, and transaction id matching.
+- Token-driven OTP challenge context: mfa_tx is resolved server-side from MFA token claims.
 - Audit events emitted for user creation, MFA, and FIDO2 operations.
 - Password storage moved to PBKDF2 hash format for new users.
 

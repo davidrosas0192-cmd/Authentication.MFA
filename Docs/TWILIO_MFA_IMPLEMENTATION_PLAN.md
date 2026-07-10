@@ -90,12 +90,18 @@ Security notes:
 - Returns all available/enabled methods for current user.
 
 2. POST /api/mfa/challenges/start
-- Input: method (sms/email/fido2), login transaction context.
+- Input: method (sms/email/fido2).
+- Transaction context is resolved from MFA token claims (`mfa_tx`) and active session.
 - Output: challenge metadata and expiration.
 
 3. POST /api/mfa/challenges/verify
-- Input: challengeId + OTP code (for sms/email) or fido2 payload.
+- Input: OTP code (for sms/email) or fido2 payload.
+- Transaction context is resolved from MFA token claims (`mfa_tx`) and active session.
 - Output: authenticated tokens if successful.
+
+4. GET /api/mfa/devices/available
+- Input: full access token.
+- Output: configured methods + remaining setup options.
 
 4. POST /api/mfa/enrollment/start
 - Input: method (sms or email) + contact value.
@@ -114,13 +120,16 @@ Security notes:
   - Return MfaToken (temporary token) and MfaTransactionId
   - Client chooses method and starts challenge
 
+After full authentication:
+- Client calls GET /api/mfa/devices/available to populate setup options.
+
 This is the primary place where allowed methods are returned.
 
 ## DTO Changes
 Update LoginResponse:
 - Add AllowedMfaMethods: string[]
 - Add MfaToken and MfaExpiresIn for MFA stage
-- Keep MfaRequired and MfaTransactionId (or rename to ChallengeId for consistency)
+- Keep MfaRequired and MfaTransactionId for traceability in RequiresMfa response
 
 Add DTOs:
 - StartMfaChallengeRequest
@@ -214,6 +223,11 @@ Test cases:
 - Implemented Twilio OTP challenge endpoints for login:
   - /api/mfa/challenges/start
   - /api/mfa/challenges/verify
+- Implemented token-driven challenge payload contract:
+  - challenge endpoints no longer require request-body mfaTransactionId
+  - transaction context is derived from mfa_tx + token session
+- Implemented setup options endpoint:
+  - /api/mfa/devices/available
 - Implemented MFA-token enforcement for login challenge endpoints:
   - Requires MfaBearer scheme
   - Validates token_type = mfa and mfa_tx claim binding

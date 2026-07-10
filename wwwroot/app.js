@@ -34,6 +34,7 @@
     copyAccessBtn: document.getElementById("copyAccessBtn"),
     copyMfaBtn: document.getElementById("copyMfaBtn"),
     clearConsoleBtn: document.getElementById("clearConsoleBtn"),
+    copyConsoleBtn: document.getElementById("copyConsoleBtn"),
     consoleOutput: document.getElementById("consoleOutput"),
     exportConsoleBtn: document.getElementById("exportConsoleBtn"),
 
@@ -62,10 +63,8 @@
     mfaChallengeCard: document.getElementById("mfaChallengeCard"),
     fillMfaChallengeBtn: document.getElementById("fillMfaChallengeBtn"),
     challengeMethod: document.getElementById("challengeMethod"),
-    challengeTx: document.getElementById("challengeTx"),
 
     verifyMfaChallengeForm: document.getElementById("verifyMfaChallengeForm"),
-    verifyChallengeTx: document.getElementById("verifyChallengeTx"),
     verifyChallengeCode: document.getElementById("verifyChallengeCode"),
 
     fido2LoginOptionsBtn: document.getElementById("fido2LoginOptionsBtn"),
@@ -103,6 +102,7 @@
       logs.length = 0;
       refs.consoleOutput.innerHTML = "";
     });
+    refs.copyConsoleBtn.addEventListener("click", copyConsoleContent);
     refs.exportConsoleBtn.addEventListener("click", exportLogs);
 
     refs.clearSessionBtn.addEventListener("click", clearSession);
@@ -213,10 +213,7 @@
     refs.mfaTokenView.value = state.mfaToken || "";
   }
 
-  function renderTransactionFields() {
-    refs.challengeTx.value = state.mfaTransactionId || refs.challengeTx.value;
-    refs.verifyChallengeTx.value = state.mfaTransactionId || refs.verifyChallengeTx.value;
-  }
+  function renderTransactionFields() {}
 
   function renderMfaMethods() {
     const methods = (state.allowedMfaMethods || []).map((x) => (x || "").toLowerCase());
@@ -239,11 +236,6 @@
 
         if (method === "sms" || method === "email") {
           refs.challengeMethod.value = method;
-          refs.challengeTx.value = state.mfaTransactionId || "";
-          refs.verifyChallengeTx.value = state.mfaTransactionId || "";
-        } else if (method === "fido2") {
-          refs.challengeTx.value = state.mfaTransactionId || "";
-          refs.verifyChallengeTx.value = state.mfaTransactionId || "";
         }
 
         persistState();
@@ -502,6 +494,23 @@
     logInfo("Console exported as JSON.");
   }
 
+  async function copyConsoleContent() {
+    if (logs.length === 0) {
+      window.alert("Console has no entries to copy.");
+      return;
+    }
+
+    const payload = {
+      copiedAt: new Date().toISOString(),
+      count: logs.length,
+      entries: logs,
+    };
+
+    const text = JSON.stringify(payload, null, 2);
+    await navigator.clipboard.writeText(text);
+    window.alert("Console copied to clipboard.");
+  }
+
   function pretty(value) {
     if (value == null) {
       return "(empty)";
@@ -623,13 +632,7 @@
     event.preventDefault();
     beginAction("Start MFA Challenge");
 
-    const tx = refs.challengeTx.value.trim() || state.mfaTransactionId;
-    if (!tx) {
-      throw new Error("MFA transaction id is required.");
-    }
-
     const payload = {
-      mfaTransactionId: tx,
       method: refs.challengeMethod.value,
     };
 
@@ -641,13 +644,7 @@
     event.preventDefault();
     beginAction("Verify MFA Challenge");
 
-    const tx = refs.verifyChallengeTx.value.trim() || state.mfaTransactionId;
-    if (!tx) {
-      throw new Error("MFA transaction id is required.");
-    }
-
     const payload = {
-      mfaTransactionId: tx,
       code: refs.verifyChallengeCode.value.trim(),
     };
 
@@ -897,11 +894,6 @@
   }
 
   function fillMfaChallengeFromSession() {
-    if (state.mfaTransactionId) {
-      refs.challengeTx.value = state.mfaTransactionId;
-      refs.verifyChallengeTx.value = state.mfaTransactionId;
-    }
-
     const method = (state.allowedMfaMethods || []).find((x) => {
       const value = (x || "").toLowerCase();
       return value === "sms" || value === "email";

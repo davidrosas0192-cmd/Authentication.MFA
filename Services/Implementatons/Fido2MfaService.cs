@@ -17,6 +17,7 @@ public class Fido2MfaService : IFido2MfaService
 {
     private readonly IFido2 _fido2;
     private readonly IUserRepository _userRepository;
+    private readonly IUserMfaMethodRepository _userMfaMethodRepository;
     private readonly IFido2CredentialRepository _credentialRepository;
     private readonly IFido2TransactionRepository _transactionRepository;
     private readonly ITokenService _tokenService;
@@ -29,6 +30,7 @@ public class Fido2MfaService : IFido2MfaService
     public Fido2MfaService(
         IFido2 fido2,
         IUserRepository userRepository,
+        IUserMfaMethodRepository userMfaMethodRepository,
         IFido2CredentialRepository credentialRepository,
         IFido2TransactionRepository transactionRepository,
         ITokenService tokenService,
@@ -41,6 +43,9 @@ public class Fido2MfaService : IFido2MfaService
     {
         _fido2 = fido2 ?? throw new ArgumentNullException(nameof(fido2));
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
+        _userMfaMethodRepository =
+            userMfaMethodRepository
+            ?? throw new ArgumentNullException(nameof(userMfaMethodRepository));
         _credentialRepository =
             credentialRepository ?? throw new ArgumentNullException(nameof(credentialRepository));
         _transactionRepository =
@@ -236,6 +241,38 @@ public class Fido2MfaService : IFido2MfaService
         await _credentialRepository.AddAsync(userCredential, cancellationToken);
 
         await _userRepository.EnableFido2MfaAsync(transaction.UserId, cancellationToken);
+
+        var existingMethod = await _userMfaMethodRepository.GetByUserIdAndMethodAsync(
+            transaction.UserId,
+            MfaMethodTypes.Fido2,
+            cancellationToken
+        );
+
+        if (existingMethod is null)
+        {
+            await _userMfaMethodRepository.AddAsync(
+                new UserMfaMethod
+                {
+                    UserId = transaction.UserId,
+                    Method = MfaMethodTypes.Fido2,
+                    IsEnabled = true,
+                    IsPrimary = false,
+                    IsVerified = true,
+                    ContactValue = null,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    UpdatedAtUtc = DateTime.UtcNow,
+                },
+                cancellationToken
+            );
+        }
+        else
+        {
+            existingMethod.IsEnabled = true;
+            existingMethod.IsVerified = true;
+            existingMethod.UpdatedAtUtc = DateTime.UtcNow;
+
+            await _userMfaMethodRepository.UpdateAsync(existingMethod, cancellationToken);
+        }
 
         transaction.IsUsed = true;
 

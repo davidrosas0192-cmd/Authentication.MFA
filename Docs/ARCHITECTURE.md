@@ -138,6 +138,7 @@ Security/authentication auditing is implemented through explicit audit records w
 
 1. Client starts challenge with MFA token (/api/mfa/challenges/start).
 2. Client verifies OTP with MFA token (/api/mfa/challenges/verify).
+3. MFA transaction context is resolved from token claims (`mfa_tx`) and active token session, not from request body.
 3. Service returns full access token on success.
 
 ## FIDO2 enrollment/login

@@ -81,8 +81,11 @@ After password validation:
   - MfaTransactionId
   - MfaToken
 - Client chooses method:
-  - sms/email: use /api/mfa/challenges/start and /api/mfa/challenges/verify with MfaToken
+  - sms/email: use /api/mfa/challenges/start and /api/mfa/challenges/verify with MfaToken (transaction context comes from token claims)
   - fido2: continue with FIDO2 login endpoints
+
+After full authentication:
+- Call GET /api/mfa/devices/available to populate remaining setup options.
 
 ## Token requirements
 
@@ -93,6 +96,9 @@ After password validation:
 - Login challenge endpoints require MFA token (Bearer mfa token):
   - /api/mfa/challenges/start
   - /api/mfa/challenges/verify
+
+- For challenge start/verify, request body no longer sends `mfaTransactionId`.
+- Server resolves transaction context from `mfa_tx` claim + active MFA token session.
 
 - Full access token is issued after MFA verification succeeds.
 

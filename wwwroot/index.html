@@ -99,12 +99,10 @@
               <option value="sms">sms</option>
               <option value="email">email</option>
             </select>
-            <input id="challengeTx" placeholder="MFA Transaction ID" />
             <button type="submit">Start Challenge</button>
           </form>
 
           <form id="verifyMfaChallengeForm" class="form-grid compact-top">
-            <input id="verifyChallengeTx" placeholder="MFA Transaction ID" />
             <input id="verifyChallengeCode" placeholder="OTP Code" required />
             <button type="submit">Verify Challenge</button>
           </form>
@@ -153,6 +151,7 @@
           <div class="console-header">
             <h2>API Response Console</h2>
             <div class="inline-actions">
+              <button id="copyConsoleBtn" class="ghost" type="button">Copy</button>
               <button id="exportConsoleBtn" class="ghost" type="button">Export JSON</button>
               <button id="clearConsoleBtn" class="ghost" type="button">Clear</button>
             </div>
@@ -163,7 +162,7 @@
     </section>
   </main>
 
-  <script src="/webauthn.js?v=5"></script>
-  <script src="/app.js?v=5"></script>
+  <script src="/webauthn.js?v=7"></script>
+  <script src="/app.js?v=7"></script>
 </body>
 </html>

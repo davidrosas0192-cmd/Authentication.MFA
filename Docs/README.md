@@ -61,8 +61,8 @@ Notes:
 
 Then open the Swagger UI at:
 
-- http://localhost:5000/swagger
-- https://localhost:5001/swagger
+- http://localhost:5190/swagger
+- https://localhost:7190/swagger
 
 ## Result pattern
 
@@ -115,9 +115,10 @@ If those files were previously tracked, they must be removed from index once wit
 
 1. Send a login request to the auth endpoint
 2. If MFA is required, the API returns AllowedMfaMethods, MfaTransactionId, and MfaToken
-3. For sms/email, use MfaToken with api/mfa/challenges/start and api/mfa/challenges/verify
+3. For sms/email, use MfaToken with api/mfa/challenges/start and api/mfa/challenges/verify (transaction context is resolved from MFA token claims)
 4. Full access token is issued only after successful MFA verification
 5. If MFA is not required, a full access token is issued directly by login
+6. After full authentication, call GET /api/mfa/devices/available to retrieve remaining setup options
 
 ### SMS/Email enrollment (Twilio Verify)
 
@@ -147,7 +148,7 @@ The project serves a browser test client from the app root using static files in
 - Open the API base URL in the browser (for example https://localhost:xxxx/).
 - The client guides flows by token state:
 	- RequiresMfa: shows only registered verification methods.
-	- Authenticated with setup options: shows only enrollment setup options.
+	- Authenticated: loads setup options from /api/mfa/devices/available and shows only enrollment options not configured yet.
 - Selecting a method shows the exact endpoints to call for that method.
 
 See WWWROOT_CLIENT_PLAN.md for interaction details.
@@ -165,6 +166,7 @@ See WWWROOT_CLIENT_PLAN.md for interaction details.
 		- /api/mfa/challenges/verify
 		- /api/fido2/login/options
 		- /api/fido2/login/complete
+	- For sms/email challenge endpoints, request body no longer sends mfaTransactionId; it is resolved server-side from mfa_tx claim.
 	- Full access token is rejected on these endpoints
 
 ## Security notes

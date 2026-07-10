@@ -10,14 +10,16 @@ public interface IMfaService
     Task<List<string>> GetAvailableSetupMethodsAsync(long userId, CancellationToken cancellationToken);
     Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(
         long userId,
-        StartMfaChallengeRequest request,
+        Guid mfaTransactionId,
+        string method,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
     );
     Task<Result<LoginResponse>> VerifyChallengeAsync(
         long userId,
-        VerifyMfaChallengeRequest request,
+        Guid mfaTransactionId,
+        string code,
         CancellationToken cancellationToken
     );
     Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentAsync(

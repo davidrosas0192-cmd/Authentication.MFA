@@ -108,14 +108,15 @@ public class MfaService : IMfaService
 
     public async Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(
         long userId,
-        StartMfaChallengeRequest request,
+        Guid mfaTransactionId,
+        string methodName,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
     )
     {
         var challenge = await _mfaChallengeRepository.GetByIdAsync(
-            request.MfaTransactionId,
+            mfaTransactionId,
             cancellationToken
         );
 
@@ -135,7 +136,7 @@ public class MfaService : IMfaService
             );
         }
 
-        var normalizedMethod = request.Method.Trim().ToLowerInvariant();
+        var normalizedMethod = methodName.Trim().ToLowerInvariant();
         if (normalizedMethod != MfaMethodTypes.Sms && normalizedMethod != MfaMethodTypes.Email)
         {
             return Result<StartMfaChallengeResponse>.Failure(
@@ -200,12 +201,13 @@ public class MfaService : IMfaService
 
     public async Task<Result<LoginResponse>> VerifyChallengeAsync(
         long userId,
-        VerifyMfaChallengeRequest request,
+        Guid mfaTransactionId,
+        string code,
         CancellationToken cancellationToken
     )
     {
         var challenge = await _mfaChallengeRepository.GetByIdAsync(
-            request.MfaTransactionId,
+            mfaTransactionId,
             cancellationToken
         );
 
@@ -257,7 +259,7 @@ public class MfaService : IMfaService
 
         var isApproved = await _twilioOtpService.CheckVerificationAsync(
             challenge.ContactValue ?? method.ContactValue,
-            request.Code,
+            code,
             cancellationToken
         );
 

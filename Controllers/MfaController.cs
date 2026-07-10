@@ -103,14 +103,10 @@ public class MfaController : ControllerBase
                 return mfaContextResult.ErrorResult;
             }
 
-            if (mfaContextResult.MfaTransactionId != request.MfaTransactionId)
-            {
-                return Unauthorized(new { message = "Invalid MFA transaction." });
-            }
-
             var response = await _mfaService.StartChallengeAsync(
                 mfaContextResult.UserId,
-                request,
+                mfaContextResult.MfaTransactionId,
+                request.Method,
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
                 Request.Headers.UserAgent.ToString(),
                 cancellationToken
@@ -140,14 +136,10 @@ public class MfaController : ControllerBase
                 return mfaContextResult.ErrorResult;
             }
 
-            if (mfaContextResult.MfaTransactionId != request.MfaTransactionId)
-            {
-                return Unauthorized(new { message = "Invalid MFA transaction." });
-            }
-
             var response = await _mfaService.VerifyChallengeAsync(
                 mfaContextResult.UserId,
-                request,
+                mfaContextResult.MfaTransactionId,
+                request.Code,
                 cancellationToken
             );
 

@@ -6,11 +6,6 @@ This guide explains how to use every endpoint in the API, including Auth, MFA (S
 
 Use your local host/port from launch settings or Swagger:
 
-- https://localhost:7183
-- http://localhost:5183
-
-Current launch profile values in this repo are:
-
 - https://localhost:7190
 - http://localhost:5190
 
@@ -137,6 +132,20 @@ Request examples:
 }
 ```
 
+## 3.3 GET /api/mfa/devices/available
+
+Headers:
+- Authorization: Bearer <access_token>
+
+Response data:
+
+```json
+{
+  "allowedMfaMethods": ["sms"],
+  "availableMfaSetupOptions": ["email", "fido2"]
+}
+```
+
 ```json
 {
   "method": "email",
@@ -194,10 +203,13 @@ Request:
 
 ```json
 {
-  "mfaTransactionId": "11111111-1111-1111-1111-111111111111",
   "method": "sms"
 }
 ```
+
+Note:
+- `mfaTransactionId` is resolved server-side from the MFA token (`mfa_tx` claim).
+- Client does not send `mfaTransactionId` in request payload.
 
 Response data:
 
@@ -219,10 +231,13 @@ Request:
 
 ```json
 {
-  "mfaTransactionId": "11111111-1111-1111-1111-111111111111",
   "code": "123456"
 }
 ```
+
+Note:
+- `mfaTransactionId` is resolved server-side from the MFA token (`mfa_tx` claim).
+- Client does not send `mfaTransactionId` in request payload.
 
 Success response returns tokens:
 

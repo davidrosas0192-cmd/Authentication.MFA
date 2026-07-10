@@ -44,24 +44,13 @@ public class AuthController : ControllerBase
 
     private IActionResult ToActionResult<T>(Result<T> result)
     {
-        if (result.IsSuccess)
-        {
-            var payload = new
-            {
-                success = true,
-                message = result.Message,
-                data = result.Data,
-            };
+        var payload = result.ToResponsePayload();
 
-            return result.StatusCode.HasValue
-                ? StatusCode(result.StatusCode.Value, payload)
-                : Ok(payload);
+        if (result.StatusCode.HasValue)
+        {
+            return StatusCode(result.StatusCode.Value, payload);
         }
 
-        var errorPayload = new { success = false, message = result.Error ?? result.Message };
-
-        return result.StatusCode.HasValue
-            ? StatusCode(result.StatusCode.Value, errorPayload)
-            : BadRequest(errorPayload);
+        return result.IsSuccess ? Ok(payload) : BadRequest(payload);
     }
 }

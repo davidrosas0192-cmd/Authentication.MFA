@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Authentication.Fido2")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+26934f89a67177afee69c7e9c4d1e55a47c492af")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7ef8b6b5492d9b276b8aa0cead2b0a936a932f8b")]
 [assembly: System.Reflection.AssemblyProductAttribute("Authentication.Fido2")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Authentication.Fido2")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

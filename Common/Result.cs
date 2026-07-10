@@ -12,6 +12,8 @@ public class Result
 
     public int? StatusCode { get; protected init; }
 
+    protected virtual object? ResponseData => null;
+
     public static Result Success(string? message = null) =>
         new() { IsSuccess = true, Message = message };
 
@@ -25,11 +27,28 @@ public class Result
             Message = message,
         };
     }
+
+    public object ToResponsePayload()
+    {
+        if (IsSuccess)
+        {
+            return new
+            {
+                success = true,
+                message = Message,
+                data = ResponseData,
+            };
+        }
+
+        return new { success = false, message = Error ?? Message };
+    }
 }
 
 public class Result<T> : Result
 {
     public T? Data { get; protected init; }
+
+    protected override object? ResponseData => Data;
 
     protected Result() { }
 

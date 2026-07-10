@@ -10,12 +10,19 @@ public class AuthService : IAuthService
     private readonly IUserRepository _userRepository;
     private readonly ITokenService _tokenService;
     private readonly IAuditService _auditService;
+    private readonly IMfaService _mfaService;
 
-    public AuthService(IUserRepository userRepository, ITokenService tokenService, IAuditService auditService)
+    public AuthService(
+        IUserRepository userRepository,
+        ITokenService tokenService,
+        IAuditService auditService,
+        IMfaService mfaService
+    )
     {
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _tokenService = tokenService;
         _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
+        _mfaService = mfaService ?? throw new ArgumentNullException(nameof(mfaService));
     }
 
     public async Task<Result<LoginResponse>> LoginAsync(
@@ -59,8 +66,21 @@ public class AuthService : IAuthService
             );
         }
 
-        if (user.IsFido2MfaEnabled)
+        var allowedMfaMethods = await _mfaService.GetAllowedMethodsAsync(user.Id, cancellationToken);
+        if (allowedMfaMethods.Count == 0 && user.IsFido2MfaEnabled)
         {
+            allowedMfaMethods.Add("fido2");
+        }
+
+        if (allowedMfaMethods.Count > 0)
+        {
+            var mfaTransactionId = await _mfaService.CreateSelectionChallengeAsync(
+                user.Id,
+                ipAddress,
+                userAgent,
+                cancellationToken
+            );
+
             await _auditService.TrackAuthenticationEventAsync(
                 user.Id,
                 user.Username,
@@ -78,17 +98,20 @@ public class AuthService : IAuthService
                 user.Id,
                 user.Username,
                 null,
-                new { requiresFido2 = true },
+                new { allowedMfaMethods },
                 cancellationToken
             );
 
             return Result<LoginResponse>.Success(
                 new LoginResponse
                 {
-                    Status = "RequiresFido2",
-                    RequiresFido2 = true,
+                    Status = "RequiresMfa",
+                    RequiresFido2 = allowedMfaMethods.Contains("fido2"),
+                    MfaRequired = true,
+                    MfaTransactionId = mfaTransactionId,
+                    AllowedMfaMethods = allowedMfaMethods,
                 },
-                "FIDO2 verification required."
+                "MFA verification required."
             );
         }
 

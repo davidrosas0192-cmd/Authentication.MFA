@@ -9,4 +9,5 @@ public class LoginResponse
     public bool RequiresFido2 { get; set; }
     public bool MfaRequired { get; set; }
     public Guid? MfaTransactionId { get; set; }
+    public List<string> AllowedMfaMethods { get; set; } = [];
 }

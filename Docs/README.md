@@ -159,3 +159,4 @@ If those files were previously tracked, they must be removed from index once wit
 - [Architecture](./ARCHITECTURE.md)
 - [OWASP Audit Plan](./OWASP_AUDIT_PLAN.md)
 - [Logging Database Migration](./LOGGING_DATABASE_MIGRATION.md)
+- [Twilio MFA Implementation Plan](./TWILIO_MFA_IMPLEMENTATION_PLAN.md)

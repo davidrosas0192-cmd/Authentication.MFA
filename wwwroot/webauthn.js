@@ -58,6 +58,9 @@
 
   function serializeAttestationCredential(credential) {
     const response = credential.response;
+    const transports = typeof response.getTransports === "function"
+      ? response.getTransports()
+      : [];
 
     return {
       Id: credential.id,
@@ -66,6 +69,7 @@
       Response: {
         ClientDataJson: uint8ArrayToBase64Url(response.clientDataJSON),
         AttestationObject: uint8ArrayToBase64Url(response.attestationObject),
+        Transports: transports.length > 0 ? transports : ["internal"],
       },
       ClientExtensionResults: credential.getClientExtensionResults(),
     };

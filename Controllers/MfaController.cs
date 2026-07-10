@@ -7,6 +7,7 @@ using Authentication.Fido2.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace Authentication.Fido2.Controllers;
 
@@ -35,8 +36,7 @@ public class MfaController : ControllerBase
     {
         try
         {
-            var userIdValue = User.FindFirst("sub")?.Value;
-            if (string.IsNullOrWhiteSpace(userIdValue) || !long.TryParse(userIdValue, out var userId))
+            if (!TryGetUserId(User, out var userId))
             {
                 return Unauthorized(new { message = "Invalid token." });
             }
@@ -143,8 +143,7 @@ public class MfaController : ControllerBase
     {
         try
         {
-            var userIdValue = User.FindFirst("sub")?.Value;
-            if (string.IsNullOrWhiteSpace(userIdValue) || !long.TryParse(userIdValue, out var userId))
+            if (!TryGetUserId(User, out var userId))
             {
                 return Unauthorized(new { message = "Invalid token." });
             }
@@ -175,8 +174,7 @@ public class MfaController : ControllerBase
     {
         try
         {
-            var userIdValue = User.FindFirst("sub")?.Value;
-            if (string.IsNullOrWhiteSpace(userIdValue) || !long.TryParse(userIdValue, out var userId))
+            if (!TryGetUserId(User, out var userId))
             {
                 return Unauthorized(new { message = "Invalid token." });
             }
@@ -212,13 +210,13 @@ public class MfaController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        var userIdValue = User.FindFirst("sub")?.Value;
+        var hasUserId = TryGetUserId(User, out var userId);
         var tokenType = User.FindFirst("token_type")?.Value;
         var tokenTransactionId = User.FindFirst("mfa_tx")?.Value;
         var tokenJti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
 
         if (
-            !long.TryParse(userIdValue, out var userId)
+            !hasUserId
             || !string.Equals(tokenType, "mfa", StringComparison.OrdinalIgnoreCase)
             || !Guid.TryParse(tokenTransactionId, out var mfaTransactionId)
             || string.IsNullOrWhiteSpace(tokenJti)
@@ -238,5 +236,14 @@ public class MfaController : ControllerBase
         }
 
         return (userId, mfaTransactionId, null);
+    }
+
+    private static bool TryGetUserId(ClaimsPrincipal user, out long userId)
+    {
+        var userIdValue = user.FindFirst("sub")?.Value
+            ?? user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+            ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        return long.TryParse(userIdValue, out userId);
     }
 }

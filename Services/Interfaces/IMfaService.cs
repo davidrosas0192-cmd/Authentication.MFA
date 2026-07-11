@@ -34,6 +34,25 @@ public interface IMfaService
         VerifyMfaEnrollmentRequest request,
         CancellationToken cancellationToken
     );
+    Task<Result<RemoveMfaMethodResponse>> RemoveMethodAsync(
+        long userId,
+        string method,
+        CancellationToken cancellationToken
+    );
+    Task<Result<StartMfaReconfigureResponse>> StartReconfigureMethodAsync(
+        long userId,
+        string method,
+        StartMfaReconfigureRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    );
+    Task<Result<CompleteMfaReconfigureResponse>> CompleteReconfigureMethodAsync(
+        long userId,
+        string method,
+        CompleteMfaReconfigureRequest request,
+        CancellationToken cancellationToken
+    );
     Task<Guid> CreateSelectionChallengeAsync(
         long userId,
         string? ipAddress,

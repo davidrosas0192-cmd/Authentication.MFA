@@ -80,7 +80,6 @@ After password validation:
 - If MFA methods exist, login returns:
   - MfaRequired = true
   - AllowedMfaMethods
-  - MfaTransactionId
   - MfaToken
 - Client chooses method:
   - sms/email: use /api/mfa/challenges/start and /api/mfa/challenges/verify with MfaToken (transaction context comes from token claims)

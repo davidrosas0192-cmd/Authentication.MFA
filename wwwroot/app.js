@@ -1,6 +1,6 @@
 (() => {
   const STORAGE_KEY = "mfa_client_state_v1";
-  const ALL_MFA_OPTIONS = ["sms", "email", "fido2"];
+  const ALL_MFA_OPTIONS = ["sms", "email", "fido2", "recovery_code"];
   const ENDPOINTS = {
     users: ["/api/users"],
     sessionLogin: ["/api/sessions", "/api/auth/login"],
@@ -99,6 +99,16 @@
     fido2EnrollOptionsBtn: document.getElementById("fido2EnrollOptionsBtn"),
     fido2EnrollCompleteBtn: document.getElementById("fido2EnrollCompleteBtn"),
     fido2EnrollmentCard: document.getElementById("fido2EnrollmentCard"),
+
+    mfaManageCard: document.getElementById("mfaManageCard"),
+    removeMethodForm: document.getElementById("removeMethodForm"),
+    removeMethod: document.getElementById("removeMethod"),
+    startReconfigureForm: document.getElementById("startReconfigureForm"),
+    reconfigureMethod: document.getElementById("reconfigureMethod"),
+    reconfigureContact: document.getElementById("reconfigureContact"),
+    completeReconfigureForm: document.getElementById("completeReconfigureForm"),
+    reconfigureTx: document.getElementById("reconfigureTx"),
+    reconfigureCode: document.getElementById("reconfigureCode"),
   };
 
   function boot() {
@@ -143,6 +153,10 @@
 
     refs.fido2EnrollOptionsBtn.addEventListener("click", onFido2EnrollOptions);
     refs.fido2EnrollCompleteBtn.addEventListener("click", onFido2EnrollComplete);
+
+    refs.removeMethodForm.addEventListener("submit", onRemoveMfaMethod);
+    refs.startReconfigureForm.addEventListener("submit", onStartReconfigureMethod);
+    refs.completeReconfigureForm.addEventListener("submit", onCompleteReconfigureMethod);
   }
 
   function hydrateState() {
@@ -251,6 +265,8 @@
 
         if (method === "sms" || method === "email") {
           refs.challengeMethod.value = method;
+        } else if (method === "recovery_code") {
+          refs.challengeMethod.value = "recovery_code";
         }
 
         persistState();
@@ -311,7 +327,7 @@
 
   function renderEndpointHints() {
     const verify = (state.selectedVerifyMethod || "").toLowerCase();
-    if (verify === "sms" || verify === "email") {
+    if (verify === "sms" || verify === "email" || verify === "recovery_code") {
       refs.verifyEndpointsHint.hidden = false;
       refs.verifyEndpointsHint.innerHTML =
         `<strong>Use these endpoints:</strong><br/><code>POST /api/mfa/challenges</code><br/><code>PATCH /api/mfa/challenges/current</code>`;
@@ -347,12 +363,16 @@
     const selectedSetupMethod = (state.selectedSetupMethod || "").toLowerCase();
 
     refs.mfaMethodsCard.hidden = !(hasMfaToken && (state.allowedMfaMethods || []).length > 0);
-    refs.mfaChallengeCard.hidden = !(hasMfaToken && (selectedVerifyMethod === "sms" || selectedVerifyMethod === "email"));
+    refs.mfaChallengeCard.hidden = !(
+      hasMfaToken
+      && (selectedVerifyMethod === "sms" || selectedVerifyMethod === "email" || selectedVerifyMethod === "recovery_code")
+    );
     refs.fido2LoginCard.hidden = !(hasMfaToken && selectedVerifyMethod === "fido2");
 
     refs.setupMfaCard.hidden = !(hasFullToken && (state.availableMfaSetupOptions || []).length > 0);
     refs.mfaEnrollmentCard.hidden = !(hasFullToken && (selectedSetupMethod === "sms" || selectedSetupMethod === "email"));
     refs.fido2EnrollmentCard.hidden = !(hasFullToken && selectedSetupMethod === "fido2");
+    refs.mfaManageCard.hidden = !hasFullToken;
   }
 
   async function loadDevicesAvailable() {
@@ -627,7 +647,6 @@
 
     if (loginData.status === "RequiresMfa") {
       state.mfaToken = loginData.mfaToken || null;
-      state.mfaTransactionId = loginData.mfaTransactionId || null;
       state.allowedMfaMethods = loginData.allowedMfaMethods || [];
       state.availableMfaSetupOptions = [];
       state.accessToken = null;
@@ -880,6 +899,83 @@
     persistState();
     render();
     focusCard(refs.setupMfaCard.hidden ? refs.loginCard : refs.setupMfaCard);
+  }
+
+  async function onRemoveMfaMethod(event) {
+    event.preventDefault();
+    beginAction("Remove MFA Method");
+
+    const method = refs.removeMethod.value;
+    await apiCall(`/api/mfa/methods/${encodeURIComponent(method)}`, "DELETE", null, "full");
+
+    await loadDevicesAvailable();
+    state.selectedSetupMethod = null;
+    persistState();
+    render();
+    focusCard(refs.mfaManageCard);
+  }
+
+  async function onStartReconfigureMethod(event) {
+    event.preventDefault();
+    beginAction("Start MFA Reconfigure");
+
+    const method = refs.reconfigureMethod.value;
+    if (method === "fido2") {
+      state.selectedSetupMethod = "fido2";
+      await onFido2EnrollOptions();
+      focusCard(refs.fido2EnrollmentCard);
+      return;
+    }
+
+    const payload = { contactValue: refs.reconfigureContact.value.trim() };
+    const result = await apiCall(
+      `/api/mfa/methods/${encodeURIComponent(method)}/reconfigure`,
+      "POST",
+      payload,
+      "full"
+    );
+
+    if (!result.success || !result.data) {
+      return;
+    }
+
+    refs.reconfigureTx.value = result.data.reconfigureTransactionId || "";
+    persistState();
+    render();
+    focusCard(refs.mfaManageCard);
+  }
+
+  async function onCompleteReconfigureMethod(event) {
+    event.preventDefault();
+    beginAction("Complete MFA Reconfigure");
+
+    const method = refs.reconfigureMethod.value;
+    if (method === "fido2") {
+      await onFido2EnrollComplete();
+      return;
+    }
+
+    const payload = {
+      reconfigureTransactionId: refs.reconfigureTx.value.trim(),
+      code: refs.reconfigureCode.value.trim(),
+    };
+
+    const result = await apiCall(
+      `/api/mfa/methods/${encodeURIComponent(method)}/reconfigure/current`,
+      "PATCH",
+      payload,
+      "full"
+    );
+
+    if (!result.success) {
+      return;
+    }
+
+    await loadDevicesAvailable();
+    state.selectedSetupMethod = null;
+    persistState();
+    render();
+    focusCard(refs.mfaManageCard);
   }
 
   async function hydrateAuthenticatedSession(data) {

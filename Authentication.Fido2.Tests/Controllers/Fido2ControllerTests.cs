@@ -59,7 +59,10 @@ public class Fido2ControllerTests
     {
         var service = new RecordingFido2MfaService
         {
-            CompleteEnrollmentResultToReturn = Result<string>.Success("ok"),
+            CompleteEnrollmentResultToReturn = Result<CompleteFido2EnrollmentResponse>.Success(new CompleteFido2EnrollmentResponse
+            {
+                RecoveryCodes = ["ABCD-EFGH-IJKL"],
+            }),
         };
         var auditService = new RecordingAuditService();
 

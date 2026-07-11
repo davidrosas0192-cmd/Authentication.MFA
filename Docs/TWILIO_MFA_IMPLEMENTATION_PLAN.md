@@ -117,7 +117,7 @@ Security notes:
 - If methods exist:
   - Return `RequiresMfa = true`
   - Return `AllowedMfaMethods` array in `LoginResponse`
-  - Return `MfaToken` (temporary token) and `MfaTransactionId`
+  - Return `MfaToken` (temporary token)
   - Client chooses method and starts challenge
 
 After full authentication:
@@ -129,7 +129,7 @@ This is the primary place where allowed methods are returned.
 Update LoginResponse:
 - Add AllowedMfaMethods: string[]
 - Add MfaToken and MfaExpiresIn for MFA stage
-- Keep MfaRequired and MfaTransactionId for traceability in RequiresMfa response
+- Keep MfaRequired for traceability in RequiresMfa response
 
 Add DTOs:
 - StartMfaChallengeRequest
@@ -222,7 +222,7 @@ Test cases:
   - UserMfaMethods
   - MfaChallenges (including Purpose and ContactValue)
 - Implemented login response contract:
-  - AllowedMfaMethods + MfaTransactionId + MfaToken when MFA required
+  - AllowedMfaMethods + MfaToken when MFA required
 - Implemented Twilio OTP challenge endpoints for login:
   - /api/mfa/challenges/start
   - /api/mfa/challenges/verify

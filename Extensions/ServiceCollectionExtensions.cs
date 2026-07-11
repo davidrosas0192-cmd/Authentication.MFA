@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAccessTokenSessionRepository, AccessTokenSessionRepository>();
         services.AddScoped<IUserMfaMethodRepository, UserMfaMethodRepository>();
         services.AddScoped<IMfaChallengeRepository, MfaChallengeRepository>();
+        services.AddScoped<IUserRecoveryCodeRepository, UserRecoveryCodeRepository>();
         services.AddScoped<ITokenService, TokenService>();
 
         return services;

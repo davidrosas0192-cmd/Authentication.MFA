@@ -21,6 +21,14 @@ public class UserMfaMethodRepository : IUserMfaMethodRepository
             .ToListAsync(cancellationToken);
     }
 
+    public Task<List<UserMfaMethod>> GetByUserIdAsync(long userId, CancellationToken cancellationToken)
+    {
+        return _context
+            .UserMfaMethods.AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<UserMfaMethod?> GetEnabledByUserIdAndMethodAsync(
         long userId,
         string method,

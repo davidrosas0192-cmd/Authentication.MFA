@@ -98,12 +98,13 @@
             <select id="challengeMethod" required>
               <option value="sms">sms</option>
               <option value="email">email</option>
+              <option value="recovery_code">recovery_code</option>
             </select>
             <button type="submit">Start Challenge</button>
           </form>
 
           <form id="verifyMfaChallengeForm" class="form-grid compact-top">
-            <input id="verifyChallengeCode" placeholder="OTP Code" required />
+            <input id="verifyChallengeCode" placeholder="OTP or Recovery Code" required />
             <button type="submit">Verify Challenge</button>
           </form>
         </article>
@@ -143,6 +144,36 @@
             <button id="fido2EnrollOptionsBtn" type="button">Create Enrollment Options</button>
             <button id="fido2EnrollCompleteBtn" type="button">Complete FIDO2 Enrollment</button>
           </div>
+        </article>
+
+        <article class="card" id="mfaManageCard" hidden>
+          <h2>Manage MFA Methods</h2>
+          <p class="muted">Remove or reconfigure factors without leaving this client.</p>
+
+          <form id="removeMethodForm" class="form-grid">
+            <select id="removeMethod" required>
+              <option value="sms">sms</option>
+              <option value="email">email</option>
+              <option value="fido2">fido2</option>
+            </select>
+            <button type="submit">Remove Method</button>
+          </form>
+
+          <form id="startReconfigureForm" class="form-grid compact-top">
+            <select id="reconfigureMethod" required>
+              <option value="sms">sms</option>
+              <option value="email">email</option>
+              <option value="fido2">fido2</option>
+            </select>
+            <input id="reconfigureContact" placeholder="New phone or email (sms/email)" />
+            <button type="submit">Start Reconfigure</button>
+          </form>
+
+          <form id="completeReconfigureForm" class="form-grid compact-top">
+            <input id="reconfigureTx" placeholder="Reconfigure Transaction ID" />
+            <input id="reconfigureCode" placeholder="OTP Code" />
+            <button type="submit">Complete Reconfigure</button>
+          </form>
         </article>
       </div>
 

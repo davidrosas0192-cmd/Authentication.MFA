@@ -19,6 +19,9 @@ public class RouteMetadataTests
         AssertContainsTemplates(typeof(MfaController), "VerifyChallenge", "/api/mfa/challenges/current", "challenges/verify");
         AssertContainsTemplates(typeof(MfaController), "StartEnrollment", "/api/mfa/enrollments", "enrollment/start");
         AssertContainsTemplates(typeof(MfaController), "VerifyEnrollment", "/api/mfa/enrollments/current", "enrollment/verify");
+        AssertContainsTemplates(typeof(MfaController), "RemoveMethod", "methods/{method}");
+        AssertContainsTemplates(typeof(MfaController), "StartReconfigureMethod", "methods/{method}/reconfigure");
+        AssertContainsTemplates(typeof(MfaController), "CompleteReconfigureMethod", "methods/{method}/reconfigure/current");
 
         AssertContainsTemplates(typeof(Fido2Controller), "CreateEnrollmentOptions", "/api/fido2/enrollments", "enrollment/options");
         AssertContainsTemplates(typeof(Fido2Controller), "CompleteEnrollment", "/api/fido2/enrollments/current", "enrollment/complete");

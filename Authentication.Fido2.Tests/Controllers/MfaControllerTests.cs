@@ -261,11 +261,26 @@ public class MfaControllerTests
             {
                 Method = "sms",
                 IsVerified = true,
+                RecoveryCodes = ["ABCD-EFGH-IJKL"],
             }),
         };
-        var auditService = new RecordingAuditService();
+    }
 
-        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), auditService, NullLogger<MfaController>.Instance)
+    [Fact]
+    public async Task StartReconfigureMethod_ReturnsOk_WhenUserIsValid()
+    {
+        var service = new RecordingMfaService
+        {
+            StartReconfigureMethodResultToReturn = Result<StartMfaReconfigureResponse>.Success(new StartMfaReconfigureResponse
+            {
+                ReconfigureTransactionId = Guid.NewGuid(),
+                Method = "email",
+                Status = "pending",
+                ExpiresAtUtc = DateTime.UtcNow,
+            }),
+        };
+
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -273,22 +288,45 @@ public class MfaControllerTests
             },
         };
 
-        var result = await controller.VerifyEnrollment(new VerifyMfaEnrollmentRequest { EnrollmentTransactionId = Guid.NewGuid(), Code = "123456" }, CancellationToken.None);
+        var result = await controller.StartReconfigureMethod(
+            "email",
+            new StartMfaReconfigureRequest { ContactValue = "user@example.com" },
+            CancellationToken.None
+        );
 
         Assert.IsType<OkObjectResult>(result);
-        Assert.Equal(1, service.VerifyEnrollmentCallCount);
+        Assert.Equal(1, service.StartReconfigureMethodCallCount);
+        Assert.Equal("email", service.LastMethodRouteValue);
     }
 
     [Fact]
-    public async Task VerifyEnrollment_ReturnsUnauthorized_WhenTokenIsMissing()
+    public async Task CompleteReconfigureMethod_ReturnsOk_WhenUserIsValid()
     {
-        var controller = new MfaController(new RecordingMfaService(), new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        var service = new RecordingMfaService
         {
-            ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
+            CompleteReconfigureMethodResultToReturn = Result<CompleteMfaReconfigureResponse>.Success(new CompleteMfaReconfigureResponse
+            {
+                Method = "email",
+                IsReconfigured = true,
+            }),
         };
 
-        var result = await controller.VerifyEnrollment(new VerifyMfaEnrollmentRequest { EnrollmentTransactionId = Guid.NewGuid(), Code = "123456" }, CancellationToken.None);
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+            },
+        };
 
-        Assert.IsType<UnauthorizedObjectResult>(result);
+        var result = await controller.CompleteReconfigureMethod(
+            "email",
+            new CompleteMfaReconfigureRequest { ReconfigureTransactionId = Guid.NewGuid(), Code = "123456" },
+            CancellationToken.None
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, service.CompleteReconfigureMethodCallCount);
+        Assert.Equal("email", service.LastMethodRouteValue);
     }
 }

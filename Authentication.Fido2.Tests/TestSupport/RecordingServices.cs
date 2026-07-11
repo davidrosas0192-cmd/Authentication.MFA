@@ -2,8 +2,8 @@ using Authentication.Fido2.Common;
 using Authentication.Fido2.Controllers;
 using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.DTOs.Auth;
-using Authentication.Fido2.DTOs.Fido2;
 using Authentication.Fido2.DTOs.Mfa;
+using Authentication.Fido2.DTOs.Fido2;
 using Authentication.Fido2.Entities;
 using Authentication.Fido2.Services.Interfaces;
 
@@ -125,6 +125,9 @@ internal sealed class RecordingMfaService : IMfaService
     public int VerifyChallengeCallCount { get; private set; }
     public int StartEnrollmentCallCount { get; private set; }
     public int VerifyEnrollmentCallCount { get; private set; }
+    public int RemoveMethodCallCount { get; private set; }
+    public int StartReconfigureMethodCallCount { get; private set; }
+    public int CompleteReconfigureMethodCallCount { get; private set; }
     public int CreateSelectionChallengeCallCount { get; private set; }
 
     public long LastUserId { get; private set; }
@@ -133,6 +136,9 @@ internal sealed class RecordingMfaService : IMfaService
     public string? LastCode { get; private set; }
     public StartMfaEnrollmentRequest? LastStartEnrollmentRequest { get; private set; }
     public VerifyMfaEnrollmentRequest? LastVerifyEnrollmentRequest { get; private set; }
+    public string? LastMethodRouteValue { get; private set; }
+    public StartMfaReconfigureRequest? LastStartReconfigureRequest { get; private set; }
+    public CompleteMfaReconfigureRequest? LastCompleteReconfigureRequest { get; private set; }
 
     public List<string> AllowedMethodsToReturn { get; set; } = [];
     public List<string> AvailableSetupMethodsToReturn { get; set; } = [];
@@ -140,6 +146,9 @@ internal sealed class RecordingMfaService : IMfaService
     public Result<LoginResponse> VerifyChallengeResultToReturn { get; set; } = Result<LoginResponse>.Failure("Not configured");
     public Result<StartMfaEnrollmentResponse> StartEnrollmentResultToReturn { get; set; } = Result<StartMfaEnrollmentResponse>.Failure("Not configured");
     public Result<VerifyMfaEnrollmentResponse> VerifyEnrollmentResultToReturn { get; set; } = Result<VerifyMfaEnrollmentResponse>.Failure("Not configured");
+    public Result<RemoveMfaMethodResponse> RemoveMethodResultToReturn { get; set; } = Result<RemoveMfaMethodResponse>.Failure("Not configured");
+    public Result<StartMfaReconfigureResponse> StartReconfigureMethodResultToReturn { get; set; } = Result<StartMfaReconfigureResponse>.Failure("Not configured");
+    public Result<CompleteMfaReconfigureResponse> CompleteReconfigureMethodResultToReturn { get; set; } = Result<CompleteMfaReconfigureResponse>.Failure("Not configured");
     public Guid SelectionChallengeToReturn { get; set; }
 
     public Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken)
@@ -212,6 +221,48 @@ internal sealed class RecordingMfaService : IMfaService
         return Task.FromResult(VerifyEnrollmentResultToReturn);
     }
 
+    public Task<Result<RemoveMfaMethodResponse>> RemoveMethodAsync(
+        long userId,
+        string method,
+        CancellationToken cancellationToken
+    )
+    {
+        RemoveMethodCallCount++;
+        LastUserId = userId;
+        LastMethodRouteValue = method;
+        return Task.FromResult(RemoveMethodResultToReturn);
+    }
+
+    public Task<Result<StartMfaReconfigureResponse>> StartReconfigureMethodAsync(
+        long userId,
+        string method,
+        StartMfaReconfigureRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        StartReconfigureMethodCallCount++;
+        LastUserId = userId;
+        LastMethodRouteValue = method;
+        LastStartReconfigureRequest = request;
+        return Task.FromResult(StartReconfigureMethodResultToReturn);
+    }
+
+    public Task<Result<CompleteMfaReconfigureResponse>> CompleteReconfigureMethodAsync(
+        long userId,
+        string method,
+        CompleteMfaReconfigureRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        CompleteReconfigureMethodCallCount++;
+        LastUserId = userId;
+        LastMethodRouteValue = method;
+        LastCompleteReconfigureRequest = request;
+        return Task.FromResult(CompleteReconfigureMethodResultToReturn);
+    }
+
     public Task<Guid> CreateSelectionChallengeAsync(
         long userId,
         string? ipAddress,
@@ -240,7 +291,7 @@ internal sealed class RecordingFido2MfaService : IFido2MfaService
     public CompleteFido2LoginRequest? LastCompleteLoginRequest { get; private set; }
 
     public Result<Fido2OptionsResponse> CreateEnrollmentOptionsResultToReturn { get; set; } = Result<Fido2OptionsResponse>.Failure("Not configured");
-    public Result<string> CompleteEnrollmentResultToReturn { get; set; } = Result<string>.Failure("Not configured");
+    public Result<CompleteFido2EnrollmentResponse> CompleteEnrollmentResultToReturn { get; set; } = Result<CompleteFido2EnrollmentResponse>.Failure("Not configured");
     public Result<Fido2OptionsResponse> CreateLoginOptionsResultToReturn { get; set; } = Result<Fido2OptionsResponse>.Failure("Not configured");
     public Result<LoginResponse> CompleteLoginResultToReturn { get; set; } = Result<LoginResponse>.Failure("Not configured");
 
@@ -258,7 +309,7 @@ internal sealed class RecordingFido2MfaService : IFido2MfaService
         return Task.FromResult(CreateEnrollmentOptionsResultToReturn);
     }
 
-    public Task<Result<string>> CompleteEnrollmentAsync(CompleteFido2EnrollmentRequest request, long userId, CancellationToken cancellationToken)
+    public Task<Result<CompleteFido2EnrollmentResponse>> CompleteEnrollmentAsync(CompleteFido2EnrollmentRequest request, long userId, CancellationToken cancellationToken)
     {
         CompleteEnrollmentCallCount++;
         LastCompleteEnrollmentRequest = request;

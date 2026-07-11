@@ -149,9 +149,7 @@ public class AuthService : IAuthService
                 new LoginResponse
                 {
                     Status = "RequiresMfa",
-                    RequiresFido2 = allowedMfaMethods.Contains("fido2"),
                     MfaRequired = true,
-                    MfaTransactionId = mfaTransactionId,
                     MfaToken = mfaToken,
                     MfaExpiresIn = _mfaJwtOptions.ExpirationMinutes * 60,
                     AllowedMfaMethods = allowedMfaMethods,

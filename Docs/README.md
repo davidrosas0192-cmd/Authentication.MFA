@@ -123,8 +123,9 @@ The API is REST-friendly, but not pure CRUD REST everywhere because authenticati
 ### Login
 
 1. Send a login request to `POST /api/auth/login`.
-2. If MFA is required, the login response returns `AllowedMfaMethods`, `MfaTransactionId`, and `MfaToken`.
+2. If MFA is required, the login response returns `AllowedMfaMethods` and `MfaToken`.
 3. For SMS/email verification, use `MfaToken` with `POST /api/mfa/challenges/start` and `POST /api/mfa/challenges/verify`.
+4. When an enrollment completes, any `recoveryCodes` in the response must be shown once and downloadable immediately.
 4. Transaction context is resolved server-side from the MFA token claims.
 5. A full access token is issued only after successful MFA verification.
 6. If MFA is not required, a full access token is issued directly by login.

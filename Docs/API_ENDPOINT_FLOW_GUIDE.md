@@ -48,6 +48,9 @@ All controller responses follow this shape:
 12. `POST /api/fido2/enrollment/complete` (`Authorize: access token`)
 13. `POST /api/fido2/login/options` (`Authorize: mfa token`)
 14. `POST /api/fido2/login/complete` (`Authorize: mfa token`)
+15. `DELETE /api/mfa/methods/{method}` (`Authorize: access token`)
+16. `POST /api/mfa/methods/{method}/reconfigure` (`Authorize: access token`)
+17. `PATCH /api/mfa/methods/{method}/reconfigure/current` (`Authorize: access token`)
 
 ## REST Alignment
 
@@ -65,6 +68,9 @@ The API follows REST principles where practical for authentication workflows.
   - `PATCH /api/fido2/enrollments/current` for completing FIDO2 enrollment
   - `POST /api/fido2/authentications` for starting FIDO2 login
   - `PATCH /api/fido2/authentications/current` for completing FIDO2 login
+  - `DELETE /api/mfa/methods/{method}` for removing an MFA factor
+  - `POST /api/mfa/methods/{method}/reconfigure` for starting contact reconfiguration
+  - `PATCH /api/mfa/methods/{method}/reconfigure/current` for completing reconfiguration
 - Legacy action-style routes remain supported for compatibility.
 - The login and challenge flows remain ceremony-style endpoints because they model state transitions, not CRUD over a single persisted entity.
 
@@ -128,9 +134,8 @@ Possible outcomes:
 2. MFA required:
 - `data.status = RequiresMfa`
 - `data.mfaRequired = true`
-- `data.mfaTransactionId` present
 - `data.mfaToken` present (temporary token for MFA step only)
-- `data.allowedMfaMethods` contains one or more of `sms`, `email`, `fido2`
+- `data.allowedMfaMethods` contains one or more of `sms`, `email`, `fido2`, `recovery_code`
 
 Example MFA-required response:
 
@@ -141,7 +146,6 @@ Example MFA-required response:
   "data": {
     "status": "RequiresMfa",
     "mfaRequired": true,
-    "mfaTransactionId": "11111111-1111-1111-1111-111111111111",
     "mfaToken": "...",
     "mfaExpiresIn": 300,
     "allowedMfaMethods": ["sms", "email", "fido2"]
@@ -160,7 +164,7 @@ Response data:
 
 ```json
 {
-  "allowedMfaMethods": ["sms", "email", "fido2"]
+  "allowedMfaMethods": ["sms", "email", "fido2", "recovery_code"]
 }
 ```
 
@@ -244,7 +248,7 @@ Response data:
 
 ## 5) Complete Login With SMS/Email MFA
 
-After `POST /api/auth/login` returns `mfaTransactionId` and allowed methods.
+After `POST /api/auth/login` returns allowed methods.
 
 ### `POST /api/mfa/challenges/start`
 
@@ -391,7 +395,7 @@ Note:
 - `POST /api/auth/login` -> tokens
 
 2. Password + SMS/email MFA user:
-- `POST /api/auth/login` -> `RequiresMfa` + `allowedMfaMethods` + `mfaTransactionId`
+- `POST /api/auth/login` -> `RequiresMfa` + `allowedMfaMethods` + `mfaToken`
 - `POST /api/mfa/challenges/start`
 - `POST /api/mfa/challenges/verify` -> tokens
 

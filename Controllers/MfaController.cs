@@ -262,6 +262,90 @@ public class MfaController : ControllerBase
         }
     }
 
+    [Authorize]
+    [HttpDelete("methods/{method}")]
+    public async Task<IActionResult> RemoveMethod(string method, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!TryGetUserId(User, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.RemoveMethodAsync(userId, method, cancellationToken);
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred removing MFA method {Method}.", method);
+            return Problem("An error occurred while removing MFA method.");
+        }
+    }
+
+    [Authorize]
+    [HttpPost("methods/{method}/reconfigure")]
+    public async Task<IActionResult> StartReconfigureMethod(
+        string method,
+        [FromBody] StartMfaReconfigureRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            if (!TryGetUserId(User, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.StartReconfigureMethodAsync(
+                userId,
+                method,
+                request,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                cancellationToken
+            );
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred starting MFA method reconfiguration for {Method}.", method);
+            return Problem("An error occurred while starting MFA method reconfiguration.");
+        }
+    }
+
+    [Authorize]
+    [HttpPatch("methods/{method}/reconfigure/current")]
+    public async Task<IActionResult> CompleteReconfigureMethod(
+        string method,
+        [FromBody] CompleteMfaReconfigureRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            if (!TryGetUserId(User, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.CompleteReconfigureMethodAsync(
+                userId,
+                method,
+                request,
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred completing MFA method reconfiguration for {Method}.", method);
+            return Problem("An error occurred while completing MFA method reconfiguration.");
+        }
+    }
+
     private IActionResult ToActionResult<T>(Result<T> result)
     {
         var payload = result.ToResponsePayload();

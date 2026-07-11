@@ -21,6 +21,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<AccessTokenSession> AccessTokenSessions => Set<AccessTokenSession>();
     public DbSet<SecurityAuditEvent> SecurityAuditEvents => Set<SecurityAuditEvent>();
     public DbSet<AuthenticationAuditEvent> AuthenticationAuditEvents => Set<AuthenticationAuditEvent>();
+    public DbSet<UserRecoveryCodeBatch> UserRecoveryCodeBatches => Set<UserRecoveryCodeBatch>();
+    public DbSet<UserRecoveryCode> UserRecoveryCodes => Set<UserRecoveryCode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

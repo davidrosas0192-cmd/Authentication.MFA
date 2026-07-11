@@ -13,7 +13,7 @@ public interface IFido2MfaService
         CancellationToken cancellationToken
     );
 
-    Task<Result<string>> CompleteEnrollmentAsync(
+    Task<Result<CompleteFido2EnrollmentResponse>> CompleteEnrollmentAsync(
         CompleteFido2EnrollmentRequest request,
         long userId,
         CancellationToken cancellationToken

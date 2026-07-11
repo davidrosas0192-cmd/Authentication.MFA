@@ -13,5 +13,6 @@ public interface IUserRepository
         CancellationToken cancellationToken
     );
     Task EnableFido2MfaAsync(long userId, CancellationToken cancellationToken);
+    Task DisableFido2MfaAsync(long userId, CancellationToken cancellationToken);
     Task UpdateAsync(User user, CancellationToken cancellationToken);
 }

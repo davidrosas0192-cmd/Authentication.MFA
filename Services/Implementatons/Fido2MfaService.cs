@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using Authentication.Fido2.Common;
 using Authentication.Fido2.Constants;
@@ -18,6 +19,7 @@ public class Fido2MfaService : IFido2MfaService
     private readonly IFido2 _fido2;
     private readonly IUserRepository _userRepository;
     private readonly IUserMfaMethodRepository _userMfaMethodRepository;
+    private readonly IUserRecoveryCodeRepository _userRecoveryCodeRepository;
     private readonly IFido2CredentialRepository _credentialRepository;
     private readonly IFido2TransactionRepository _transactionRepository;
     private readonly ITokenService _tokenService;
@@ -31,6 +33,7 @@ public class Fido2MfaService : IFido2MfaService
         IFido2 fido2,
         IUserRepository userRepository,
         IUserMfaMethodRepository userMfaMethodRepository,
+        IUserRecoveryCodeRepository userRecoveryCodeRepository,
         IFido2CredentialRepository credentialRepository,
         IFido2TransactionRepository transactionRepository,
         ITokenService tokenService,
@@ -46,6 +49,9 @@ public class Fido2MfaService : IFido2MfaService
         _userMfaMethodRepository =
             userMfaMethodRepository
             ?? throw new ArgumentNullException(nameof(userMfaMethodRepository));
+        _userRecoveryCodeRepository =
+            userRecoveryCodeRepository
+            ?? throw new ArgumentNullException(nameof(userRecoveryCodeRepository));
         _credentialRepository =
             credentialRepository ?? throw new ArgumentNullException(nameof(credentialRepository));
         _transactionRepository =
@@ -178,7 +184,7 @@ public class Fido2MfaService : IFido2MfaService
         );
     }
 
-    public async Task<Result<string>> CompleteEnrollmentAsync(
+    public async Task<Result<CompleteFido2EnrollmentResponse>> CompleteEnrollmentAsync(
         CompleteFido2EnrollmentRequest request,
         long userId,
         CancellationToken cancellationToken
@@ -189,7 +195,7 @@ public class Fido2MfaService : IFido2MfaService
             cancellationToken
         );
 
-        var validationResult = ValidateTransaction<string>(
+        var validationResult = ValidateTransaction<CompleteFido2EnrollmentResponse>(
             transaction,
             Fido2TransactionTypes.Registration
         );
@@ -220,7 +226,7 @@ public class Fido2MfaService : IFido2MfaService
                 cancellationToken
             );
 
-            return Result<string>.Failure(
+            return Result<CompleteFido2EnrollmentResponse>.Failure(
                 "Invalid FIDO2 transaction context.",
                 StatusCodes.Status401Unauthorized
             );
@@ -318,7 +324,14 @@ public class Fido2MfaService : IFido2MfaService
             cancellationToken
         );
 
-        return Result<string>.Success("FIDO2 credential registered successfully.");
+        var recoveryCodes = await EnsureRecoveryCodesIssuedAsync(transaction.UserId, cancellationToken);
+
+        return Result<CompleteFido2EnrollmentResponse>.Success(
+            new CompleteFido2EnrollmentResponse { RecoveryCodes = recoveryCodes },
+            recoveryCodes.Count > 0
+                ? "FIDO2 credential registered successfully. Recovery codes were issued once."
+                : "FIDO2 credential registered successfully. Recovery codes already exist and were not reissued."
+        );
     }
 
     public async Task<Result<Fido2OptionsResponse>> CreateLoginOptionsAsync(
@@ -361,7 +374,13 @@ public class Fido2MfaService : IFido2MfaService
             return Result<Fido2OptionsResponse>.Failure("User is inactive.", StatusCodes.Status403Forbidden);
         }
 
-        if (!user.IsFido2MfaEnabled)
+        var enabledFido2Method = await _userMfaMethodRepository.GetEnabledByUserIdAndMethodAsync(
+            user.Id,
+            MfaMethodTypes.Fido2,
+            cancellationToken
+        );
+
+        if (enabledFido2Method is null)
         {
             await _auditService.TrackAuthenticationEventAsync(
                 user.Id,
@@ -684,5 +703,61 @@ public class Fido2MfaService : IFido2MfaService
         }
 
         return null;
+    }
+
+    private async Task<List<string>> EnsureRecoveryCodesIssuedAsync(long userId, CancellationToken cancellationToken)
+    {
+        var (existingBatch, _) = await _userRecoveryCodeRepository.GetStatusAsync(userId, cancellationToken);
+        if (existingBatch is not null)
+        {
+            return [];
+        }
+
+        const int recoveryCodeCount = 10;
+        const string recoveryCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+        var recoveryCodes = Enumerable
+            .Range(0, recoveryCodeCount)
+            .Select(_ => GenerateRecoveryCode(recoveryCodeAlphabet))
+            .ToList();
+
+        var hashes = recoveryCodes
+            .Select(code => PasswordHasher.Hash(NormalizeRecoveryCode(code)))
+            .ToList();
+
+        await _userRecoveryCodeRepository.ReplaceBatchAsync(userId, hashes, cancellationToken);
+
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.mfa.recovery_codes.issued",
+            "Information",
+            true,
+            userId,
+            null,
+            null,
+            new { count = recoveryCodes.Count },
+            cancellationToken
+        );
+
+        return recoveryCodes;
+    }
+
+    private static string GenerateRecoveryCode(string alphabet)
+    {
+        const int codeLength = 12;
+        var chars = new char[codeLength];
+
+        for (var index = 0; index < codeLength; index++)
+        {
+            chars[index] = alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)];
+        }
+
+        var value = new string(chars);
+        return $"{value[..4]}-{value.Substring(4, 4)}-{value.Substring(8, 4)}";
+    }
+
+    private static string NormalizeRecoveryCode(string requestedCode)
+    {
+        return requestedCode.Trim().Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
     }
 }

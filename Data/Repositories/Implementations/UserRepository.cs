@@ -80,4 +80,18 @@ public class UserRepository : IUserRepository
 
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task DisableFido2MfaAsync(long userId, CancellationToken cancellationToken)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+
+        if (user is null)
+        {
+            throw new InvalidOperationException("User not found.");
+        }
+
+        user.IsFido2MfaEnabled = false;
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
 }

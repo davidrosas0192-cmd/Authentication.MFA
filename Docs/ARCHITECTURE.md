@@ -145,9 +145,10 @@ Security/authentication auditing is implemented through explicit audit records w
 
 ## Current API Shape
 
-- Login returns `AllowedMfaMethods` plus `MfaTransactionId` and `MfaToken` when MFA is required.
+- Login returns `AllowedMfaMethods` and `MfaToken` when MFA is required.
 - SMS and email challenge requests do not send `mfaTransactionId` in the body.
 - FIDO2 login continues to use the MFA token and token-session validation.
+- Recovery codes are emitted only once inside the enrollment completion response and are not exposed through later read/regenerate APIs.
 
 ## FIDO2 Enrollment/Login
 

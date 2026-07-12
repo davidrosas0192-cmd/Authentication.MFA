@@ -11,4 +11,34 @@ public interface IUserRegistrationService
         string? userAgent,
         CancellationToken cancellationToken
     );
+
+    Task<Result<CreateUserResponse>> CreateUserByAdminAsync(
+        long actorUserId,
+        CreateUserRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    );
+
+    Task<Result<AdminUsersListResponse>> GetUsersForAdminAsync(
+        CancellationToken cancellationToken
+    );
+
+    Task<Result<AdminUserSummaryResponse>> UpdateUserRoleAsync(
+        long actorUserId,
+        long targetUserId,
+        UpdateUserRoleRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    );
+
+    Task<Result<AdminUserSummaryResponse>> UpdateUserStatusAsync(
+        long actorUserId,
+        long targetUserId,
+        UpdateUserStatusRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    );
 }

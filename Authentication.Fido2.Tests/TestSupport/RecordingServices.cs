@@ -12,10 +12,20 @@ namespace Authentication.Fido2.Tests.TestSupport;
 internal sealed class RecordingUserRegistrationService : IUserRegistrationService
 {
     public int CallCount { get; private set; }
+    public int AdminCallCount { get; private set; }
+    public int GetUsersCallCount { get; private set; }
+    public int UpdateRoleCallCount { get; private set; }
+    public int UpdateStatusCallCount { get; private set; }
+    public long LastActorUserId { get; private set; }
+    public long LastTargetUserId { get; private set; }
     public CreateUserRequest? LastRequest { get; private set; }
+    public UpdateUserRoleRequest? LastRoleRequest { get; private set; }
+    public UpdateUserStatusRequest? LastStatusRequest { get; private set; }
     public string? LastIpAddress { get; private set; }
     public string? LastUserAgent { get; private set; }
     public Func<Result<CreateUserResponse>>? ResultFactory { get; set; }
+    public Func<Result<AdminUsersListResponse>>? ListResultFactory { get; set; }
+    public Func<Result<AdminUserSummaryResponse>>? AdminUserResultFactory { get; set; }
 
     public Task<Result<CreateUserResponse>> CreateUserAsync(
         CreateUserRequest request,
@@ -25,6 +35,64 @@ internal sealed class RecordingUserRegistrationService : IUserRegistrationServic
     )
     {
         CallCount++;
+        LastRequest = request;
+        LastIpAddress = ipAddress;
+        LastUserAgent = userAgent;
+        return Task.FromResult(ResultFactory?.Invoke() ?? throw new InvalidOperationException("CreateUser result not configured."));
+    }
+
+    public Task<Result<AdminUsersListResponse>> GetUsersForAdminAsync(CancellationToken cancellationToken)
+    {
+        GetUsersCallCount++;
+        return Task.FromResult(ListResultFactory?.Invoke() ?? throw new InvalidOperationException("GetUsers result not configured."));
+    }
+
+    public Task<Result<AdminUserSummaryResponse>> UpdateUserRoleAsync(
+        long actorUserId,
+        long targetUserId,
+        UpdateUserRoleRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        UpdateRoleCallCount++;
+        LastActorUserId = actorUserId;
+        LastTargetUserId = targetUserId;
+        LastRoleRequest = request;
+        LastIpAddress = ipAddress;
+        LastUserAgent = userAgent;
+        return Task.FromResult(AdminUserResultFactory?.Invoke() ?? throw new InvalidOperationException("UpdateRole result not configured."));
+    }
+
+    public Task<Result<AdminUserSummaryResponse>> UpdateUserStatusAsync(
+        long actorUserId,
+        long targetUserId,
+        UpdateUserStatusRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        UpdateStatusCallCount++;
+        LastActorUserId = actorUserId;
+        LastTargetUserId = targetUserId;
+        LastStatusRequest = request;
+        LastIpAddress = ipAddress;
+        LastUserAgent = userAgent;
+        return Task.FromResult(AdminUserResultFactory?.Invoke() ?? throw new InvalidOperationException("UpdateStatus result not configured."));
+    }
+
+    public Task<Result<CreateUserResponse>> CreateUserByAdminAsync(
+        long actorUserId,
+        CreateUserRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        AdminCallCount++;
+        LastActorUserId = actorUserId;
         LastRequest = request;
         LastIpAddress = ipAddress;
         LastUserAgent = userAgent;

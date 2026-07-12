@@ -27,6 +27,12 @@ public class RouteMetadataTests
         AssertContainsTemplates(typeof(Fido2Controller), "CompleteEnrollment", "/api/fido2/enrollments/current", "enrollment/complete");
         AssertContainsTemplates(typeof(Fido2Controller), "CreateLoginOptions", "/api/fido2/authentications", "login/options");
         AssertContainsTemplates(typeof(Fido2Controller), "CompleteLogin", "/api/fido2/authentications/current", "login/complete");
+
+        AssertContainsTemplates(typeof(UsersController), "CreateUser", "");
+        AssertContainsTemplates(typeof(UsersController), "GetAdminUsers", "/api/admin/users");
+        AssertContainsTemplates(typeof(UsersController), "CreateUserByAdmin", "/api/admin/users");
+        AssertContainsTemplates(typeof(UsersController), "UpdateUserRole", "/api/admin/users/{userId:long}/role");
+        AssertContainsTemplates(typeof(UsersController), "UpdateUserStatus", "/api/admin/users/{userId:long}/status");
     }
 
     private static void AssertContainsTemplates(Type controllerType, string methodName, params string[] expectedTemplates)

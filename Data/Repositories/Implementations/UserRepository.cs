@@ -1,4 +1,3 @@
-using System.Net.WebSockets;
 using Authentication.Fido2.Data;
 using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.Entities;
@@ -13,6 +12,11 @@ public class UserRepository : IUserRepository
     public UserRepository(ApplicationDbContext applicationDbContext)
     {
         _context = applicationDbContext;
+    }
+
+    public Task<List<User>> ListAllAsync(CancellationToken cancellationToken)
+    {
+        return _context.Users.AsNoTracking().OrderBy(u => u.Id).ToListAsync(cancellationToken);
     }
 
     public async Task AddAsync(User user, CancellationToken cancellationToken)
@@ -43,6 +47,14 @@ public class UserRepository : IUserRepository
         return _context
             .Users.AsNoTracking()
             .FirstOrDefaultAsync(q => q.Username == username, cancellationToken);
+    }
+
+    public Task<int> CountActiveByRoleAsync(string role, CancellationToken cancellationToken)
+    {
+        return _context.Users.AsNoTracking().CountAsync(
+            q => q.IsActive && q.Role == role,
+            cancellationToken
+        );
     }
 
     public Task<User?> GetByUsernameOrEmailAsync(

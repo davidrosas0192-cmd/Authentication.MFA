@@ -30,6 +30,7 @@ public class TokenService : ITokenService
             new(JwtRegisteredClaimNames.Jti, tokenJti),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
+            new(ClaimTypes.Role, user.Role),
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.SecretKey));

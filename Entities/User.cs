@@ -3,6 +3,7 @@ namespace Authentication.Fido2.Entities;
 public class User
 {
     public long Id { get; set; }
+    public string Role { get; set; } = "user";
     public string Username { get; set; } = default!;
     public string Email { get; set; } = default!;
     public string PasswordHash { get; set; } = default!;

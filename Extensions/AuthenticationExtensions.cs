@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Authentication.Fido2.Constants;
 
 
 namespace Authentication.Fido2.Extensions;
@@ -89,6 +90,16 @@ public static class AuthenticationExtensions
             options.ServerName = fido2Options.ServerName!;
             options.ServerDomain = fido2Options.ServerDomain!;
             options.Origins = fido2Options.Origins!;
+        });
+
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy("AdminOnly", policy => policy.RequireRole(UserRoles.Admin));
+            options.AddPolicy("SupportOrAdmin", policy => policy.RequireRole(UserRoles.Support, UserRoles.Admin));
+            options.AddPolicy(
+                "UserSupportAdmin",
+                policy => policy.RequireRole(UserRoles.User, UserRoles.Support, UserRoles.Admin)
+            );
         });
 
         return services;

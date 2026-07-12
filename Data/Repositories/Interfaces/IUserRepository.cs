@@ -4,9 +4,11 @@ namespace Authentication.Fido2.Data.Repositories.Interfaces;
 
 public interface IUserRepository
 {
+    Task<List<User>> ListAllAsync(CancellationToken cancellationToken);
     Task<User?> GetByIdAsync(long userId, CancellationToken cancellationToken);
     Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken);
     Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<int> CountActiveByRoleAsync(string role, CancellationToken cancellationToken);
     Task AddAsync(User user, CancellationToken cancellationToken);
     Task<User?> GetByUsernameOrEmailAsync(
         string usernameOrEmail,

@@ -8,6 +8,13 @@ public interface IMfaService
 {
     Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken);
     Task<List<string>> GetAvailableSetupMethodsAsync(long userId, CancellationToken cancellationToken);
+    Task<(Guid SessionId, string ContinuationToken)> StartLoginEnrollmentSessionAsync(
+        long userId,
+        string tokenJti,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    );
     Task<Result<StartMfaManagementSessionResponse>> StartManagementSessionAsync(
         long userId,
         string? ipAddress,
@@ -66,6 +73,28 @@ public interface IMfaService
     Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentAsync(
         long userId,
         VerifyMfaEnrollmentRequest request,
+        CancellationToken cancellationToken
+    );
+    Task<Result<StartLoginEnrollmentResponse>> StartLoginEnrollmentAsync(
+        long userId,
+        Guid enrollmentSessionId,
+        StartLoginEnrollmentRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    );
+    Task<Result<VerifyLoginEnrollmentResponse>> VerifyLoginEnrollmentAsync(
+        long userId,
+        Guid enrollmentSessionId,
+        VerifyLoginEnrollmentRequest request,
+        CancellationToken cancellationToken
+    );
+    Task<Result<LoginResponse>> CompleteLoginEnrollmentSessionAsync(
+        long userId,
+        Guid enrollmentSessionId,
+        string continuationToken,
+        string? ipAddress,
+        string? userAgent,
         CancellationToken cancellationToken
     );
     Task<Result<RemoveMfaMethodResponse>> RemoveMethodAsync(

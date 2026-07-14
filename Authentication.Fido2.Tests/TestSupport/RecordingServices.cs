@@ -129,6 +129,9 @@ internal sealed class RecordingMfaService : IMfaService
     public int VerifyChallengeCallCount { get; private set; }
     public int StartEnrollmentCallCount { get; private set; }
     public int VerifyEnrollmentCallCount { get; private set; }
+    public int StartLoginEnrollmentCallCount { get; private set; }
+    public int VerifyLoginEnrollmentCallCount { get; private set; }
+    public int CompleteLoginEnrollmentSessionCallCount { get; private set; }
     public int RemoveMethodCallCount { get; private set; }
     public int StartReconfigureMethodCallCount { get; private set; }
     public int CompleteReconfigureMethodCallCount { get; private set; }
@@ -140,6 +143,8 @@ internal sealed class RecordingMfaService : IMfaService
     public string? LastCode { get; private set; }
     public StartMfaEnrollmentRequest? LastStartEnrollmentRequest { get; private set; }
     public VerifyMfaEnrollmentRequest? LastVerifyEnrollmentRequest { get; private set; }
+    public StartLoginEnrollmentRequest? LastStartLoginEnrollmentRequest { get; private set; }
+    public VerifyLoginEnrollmentRequest? LastVerifyLoginEnrollmentRequest { get; private set; }
     public string? LastMethodRouteValue { get; private set; }
     public StartMfaReconfigureRequest? LastStartReconfigureRequest { get; private set; }
     public CompleteMfaReconfigureRequest? LastCompleteReconfigureRequest { get; private set; }
@@ -154,10 +159,14 @@ internal sealed class RecordingMfaService : IMfaService
     public Result<LoginResponse> VerifyChallengeResultToReturn { get; set; } = Result<LoginResponse>.Failure("Not configured");
     public Result<StartMfaEnrollmentResponse> StartEnrollmentResultToReturn { get; set; } = Result<StartMfaEnrollmentResponse>.Failure("Not configured");
     public Result<VerifyMfaEnrollmentResponse> VerifyEnrollmentResultToReturn { get; set; } = Result<VerifyMfaEnrollmentResponse>.Failure("Not configured");
+    public Result<StartLoginEnrollmentResponse> StartLoginEnrollmentResultToReturn { get; set; } = Result<StartLoginEnrollmentResponse>.Failure("Not configured");
+    public Result<VerifyLoginEnrollmentResponse> VerifyLoginEnrollmentResultToReturn { get; set; } = Result<VerifyLoginEnrollmentResponse>.Failure("Not configured");
+    public Result<LoginResponse> CompleteLoginEnrollmentSessionResultToReturn { get; set; } = Result<LoginResponse>.Failure("Not configured");
     public Result<RemoveMfaMethodResponse> RemoveMethodResultToReturn { get; set; } = Result<RemoveMfaMethodResponse>.Failure("Not configured");
     public Result<StartMfaReconfigureResponse> StartReconfigureMethodResultToReturn { get; set; } = Result<StartMfaReconfigureResponse>.Failure("Not configured");
     public Result<CompleteMfaReconfigureResponse> CompleteReconfigureMethodResultToReturn { get; set; } = Result<CompleteMfaReconfigureResponse>.Failure("Not configured");
     public Guid SelectionChallengeToReturn { get; set; }
+    public (Guid SessionId, string ContinuationToken) LoginEnrollmentSessionToReturn { get; set; }
 
     public Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken)
     {
@@ -171,6 +180,18 @@ internal sealed class RecordingMfaService : IMfaService
         GetAvailableSetupMethodsCallCount++;
         LastUserId = userId;
         return Task.FromResult(AvailableSetupMethodsToReturn);
+    }
+
+    public Task<(Guid SessionId, string ContinuationToken)> StartLoginEnrollmentSessionAsync(
+        long userId,
+        string tokenJti,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        LastUserId = userId;
+        return Task.FromResult(LoginEnrollmentSessionToReturn);
     }
 
     public Task<Result<StartMfaManagementSessionResponse>> StartManagementSessionAsync(
@@ -297,6 +318,51 @@ internal sealed class RecordingMfaService : IMfaService
         LastUserId = userId;
         LastVerifyEnrollmentRequest = request;
         return Task.FromResult(VerifyEnrollmentResultToReturn);
+    }
+
+    public Task<Result<StartLoginEnrollmentResponse>> StartLoginEnrollmentAsync(
+        long userId,
+        Guid enrollmentSessionId,
+        StartLoginEnrollmentRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        StartLoginEnrollmentCallCount++;
+        LastUserId = userId;
+        LastMfaTransactionId = enrollmentSessionId;
+        LastStartLoginEnrollmentRequest = request;
+        return Task.FromResult(StartLoginEnrollmentResultToReturn);
+    }
+
+    public Task<Result<VerifyLoginEnrollmentResponse>> VerifyLoginEnrollmentAsync(
+        long userId,
+        Guid enrollmentSessionId,
+        VerifyLoginEnrollmentRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        VerifyLoginEnrollmentCallCount++;
+        LastUserId = userId;
+        LastMfaTransactionId = enrollmentSessionId;
+        LastVerifyLoginEnrollmentRequest = request;
+        return Task.FromResult(VerifyLoginEnrollmentResultToReturn);
+    }
+
+    public Task<Result<LoginResponse>> CompleteLoginEnrollmentSessionAsync(
+        long userId,
+        Guid enrollmentSessionId,
+        string continuationToken,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        CompleteLoginEnrollmentSessionCallCount++;
+        LastUserId = userId;
+        LastMfaTransactionId = enrollmentSessionId;
+        return Task.FromResult(CompleteLoginEnrollmentSessionResultToReturn);
     }
 
     public Task<Result<RemoveMfaMethodResponse>> RemoveMethodAsync(
@@ -464,6 +530,46 @@ internal sealed class RecordingMfaTempTokenSessionRepository : IMfaTempTokenSess
     }
 
     public Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken)
+    {
+        RevokeAllActiveByUserCallCount++;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class RecordingMfaLoginEnrollmentSessionRepository : IMfaLoginEnrollmentSessionRepository
+{
+    public MfaLoginEnrollmentSession? ActiveSessionToReturn { get; set; }
+    public int AddCallCount { get; private set; }
+    public int UpdateCallCount { get; private set; }
+    public int RevokeAllActiveByUserCallCount { get; private set; }
+    public string? LastJti { get; private set; }
+
+    public Task AddAsync(MfaLoginEnrollmentSession session, CancellationToken cancellationToken)
+    {
+        AddCallCount++;
+        ActiveSessionToReturn = session;
+        return Task.CompletedTask;
+    }
+
+    public Task<MfaLoginEnrollmentSession?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ActiveSessionToReturn?.Id == sessionId ? ActiveSessionToReturn : null);
+    }
+
+    public Task<MfaLoginEnrollmentSession?> GetActiveByJtiAsync(string tokenJti, CancellationToken cancellationToken)
+    {
+        LastJti = tokenJti;
+        return Task.FromResult(ActiveSessionToReturn?.TokenJti == tokenJti ? ActiveSessionToReturn : null);
+    }
+
+    public Task UpdateAsync(MfaLoginEnrollmentSession session, CancellationToken cancellationToken)
+    {
+        UpdateCallCount++;
+        ActiveSessionToReturn = session;
+        return Task.CompletedTask;
+    }
+
+    public Task RevokeAllActiveByUserAsync(long userId, CancellationToken cancellationToken)
     {
         RevokeAllActiveByUserCallCount++;
         return Task.CompletedTask;

@@ -4,9 +4,13 @@ GO
 
 IF OBJECT_ID(N'dbo.SecurityAuditEvents', N'U') IS NOT NULL DROP TABLE dbo.SecurityAuditEvents;
 IF OBJECT_ID(N'dbo.AuthenticationAuditEvents', N'U') IS NOT NULL DROP TABLE dbo.AuthenticationAuditEvents;
+IF OBJECT_ID(N'dbo.UserRecoveryCodes', N'U') IS NOT NULL DROP TABLE dbo.UserRecoveryCodes;
+IF OBJECT_ID(N'dbo.UserRecoveryCodeBatches', N'U') IS NOT NULL DROP TABLE dbo.UserRecoveryCodeBatches;
 IF OBJECT_ID(N'dbo.MfaTempTokenSessions', N'U') IS NOT NULL DROP TABLE dbo.MfaTempTokenSessions;
 IF OBJECT_ID(N'dbo.AccessTokenSessions', N'U') IS NOT NULL DROP TABLE dbo.AccessTokenSessions;
 IF OBJECT_ID(N'dbo.Fido2Transactions', N'U') IS NOT NULL DROP TABLE dbo.Fido2Transactions;
+IF OBJECT_ID(N'dbo.MfaLoginEnrollmentSessions', N'U') IS NOT NULL DROP TABLE dbo.MfaLoginEnrollmentSessions;
+IF OBJECT_ID(N'dbo.MfaManagementSessions', N'U') IS NOT NULL DROP TABLE dbo.MfaManagementSessions;
 IF OBJECT_ID(N'dbo.MfaChallenges', N'U') IS NOT NULL DROP TABLE dbo.MfaChallenges;
 IF OBJECT_ID(N'dbo.UserMfaMethods', N'U') IS NOT NULL DROP TABLE dbo.UserMfaMethods;
 IF OBJECT_ID(N'dbo.UserFido2Credentials', N'U') IS NOT NULL DROP TABLE dbo.UserFido2Credentials;
@@ -72,6 +76,8 @@ CREATE TABLE dbo.MfaChallenges (
     Id uniqueidentifier NOT NULL,
     UserId bigint NOT NULL,
     Purpose nvarchar(30) NOT NULL,
+    ContinuationToken nvarchar(100) NOT NULL,
+    StepVersion int NOT NULL,
     Method nvarchar(30) NULL,
     Provider nvarchar(30) NULL,
     ProviderRequestId nvarchar(120) NULL,
@@ -89,7 +95,50 @@ GO
 
 CREATE INDEX IX_MfaChallenges_UserId_Status_ExpiresAtUtc ON dbo.MfaChallenges (UserId, Status, ExpiresAtUtc);
 CREATE INDEX IX_MfaChallenges_UserId_Purpose_Status_ExpiresAtUtc ON dbo.MfaChallenges (UserId, Purpose, Status, ExpiresAtUtc);
+CREATE INDEX IX_MfaChallenges_ContinuationToken ON dbo.MfaChallenges (ContinuationToken);
 CREATE INDEX IX_MfaChallenges_ProviderRequestId ON dbo.MfaChallenges (ProviderRequestId);
+GO
+
+CREATE TABLE dbo.MfaLoginEnrollmentSessions (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    Status nvarchar(40) NOT NULL,
+    ContinuationToken nvarchar(100) NOT NULL,
+    StepVersion int NOT NULL,
+    TokenJti nvarchar(100) NOT NULL,
+    ChallengeId uniqueidentifier NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    CompletedAtUtc datetime2 NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    UpdatedAtUtc datetime2 NOT NULL,
+    CONSTRAINT PK_MfaLoginEnrollmentSessions PRIMARY KEY (Id)
+);
+GO
+
+CREATE INDEX IX_MfaLoginEnrollmentSessions_ChallengeId ON dbo.MfaLoginEnrollmentSessions (ChallengeId);
+CREATE INDEX IX_MfaLoginEnrollmentSessions_ContinuationToken ON dbo.MfaLoginEnrollmentSessions (ContinuationToken);
+CREATE UNIQUE INDEX IX_MfaLoginEnrollmentSessions_TokenJti ON dbo.MfaLoginEnrollmentSessions (TokenJti);
+CREATE INDEX IX_MfaLoginEnrollmentSessions_UserId_Status_ExpiresAtUtc ON dbo.MfaLoginEnrollmentSessions (UserId, Status, ExpiresAtUtc);
+GO
+
+CREATE TABLE dbo.MfaManagementSessions (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    Status nvarchar(40) NOT NULL,
+    ContinuationToken nvarchar(100) NOT NULL,
+    StepVersion int NOT NULL,
+    ChallengeId uniqueidentifier NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    VerifiedAtUtc datetime2 NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    UpdatedAtUtc datetime2 NOT NULL,
+    CONSTRAINT PK_MfaManagementSessions PRIMARY KEY (Id)
+);
+GO
+
+CREATE INDEX IX_MfaManagementSessions_ChallengeId ON dbo.MfaManagementSessions (ChallengeId);
+CREATE INDEX IX_MfaManagementSessions_UserId_Status_ExpiresAtUtc ON dbo.MfaManagementSessions (UserId, Status, ExpiresAtUtc);
+CREATE INDEX IX_MfaManagementSessions_ContinuationToken ON dbo.MfaManagementSessions (ContinuationToken);
 GO
 
 CREATE TABLE dbo.Fido2Transactions (
@@ -147,6 +196,35 @@ GO
 CREATE UNIQUE INDEX IX_MfaTempTokenSessions_TokenJti ON dbo.MfaTempTokenSessions (TokenJti);
 CREATE INDEX IX_MfaTempTokenSessions_UserId_ExpiresAtUtc ON dbo.MfaTempTokenSessions (UserId, ExpiresAtUtc);
 CREATE INDEX IX_MfaTempTokenSessions_MfaTransactionId ON dbo.MfaTempTokenSessions (MfaTransactionId);
+GO
+
+CREATE TABLE dbo.UserRecoveryCodeBatches (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    IssuedAtUtc datetime2 NOT NULL,
+    ReplacedAtUtc datetime2 NULL,
+    CONSTRAINT PK_UserRecoveryCodeBatches PRIMARY KEY (Id)
+);
+GO
+
+CREATE INDEX IX_UserRecoveryCodeBatches_UserId_IssuedAtUtc ON dbo.UserRecoveryCodeBatches (UserId, IssuedAtUtc);
+CREATE INDEX IX_UserRecoveryCodeBatches_UserId_ReplacedAtUtc ON dbo.UserRecoveryCodeBatches (UserId, ReplacedAtUtc);
+GO
+
+CREATE TABLE dbo.UserRecoveryCodes (
+    Id uniqueidentifier NOT NULL,
+    BatchId uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    CodeHash nvarchar(400) NOT NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    UsedAtUtc datetime2 NULL,
+    CONSTRAINT PK_UserRecoveryCodes PRIMARY KEY (Id),
+    CONSTRAINT FK_UserRecoveryCodes_UserRecoveryCodeBatches_BatchId FOREIGN KEY (BatchId) REFERENCES dbo.UserRecoveryCodeBatches (Id) ON DELETE CASCADE
+);
+GO
+
+CREATE INDEX IX_UserRecoveryCodes_BatchId ON dbo.UserRecoveryCodes (BatchId);
+CREATE INDEX IX_UserRecoveryCodes_UserId_UsedAtUtc ON dbo.UserRecoveryCodes (UserId, UsedAtUtc);
 GO
 
 CREATE TABLE dbo.AuthenticationAuditEvents (

@@ -99,6 +99,7 @@ Current persistence model is defined by EF entities and migrations.
 - `UserFido2Credentials`
 - `UserMfaMethods`
 - `MfaChallenges`
+- `MfaLoginEnrollmentSessions`
 - `MfaManagementSessions`
 - `MfaTempTokenSessions`
 - `AccessTokenSessions`
@@ -117,6 +118,17 @@ Current persistence model is defined by EF entities and migrations.
   - `ContinuationToken` (indexed)
   - `StepVersion`
 - Supports challenge metadata: method/provider/channel/contact
+
+`MfaLoginEnrollmentSessions`:
+
+- Dedicated bootstrap session for login-time MFA enrollment before full authentication is granted
+- Includes:
+  - `Status`
+  - `ContinuationToken` (indexed)
+  - `StepVersion`
+  - `TokenJti` (unique)
+  - `ChallengeId`
+  - `ExpiresAtUtc`, `CompletedAtUtc`
 
 `MfaManagementSessions`:
 
@@ -155,6 +167,13 @@ Current persistence model is defined by EF entities and migrations.
 - Carries `token_type = mfa`, `mfa_tx`, and `jti`
 - Validated against `MfaTempTokenSessions`
 
+### Login Enrollment Token
+
+- Issued when login requires MFA setup before authentication can complete
+- Carries `token_type = login_enrollment`, `enrollment_sid`, and `jti`
+- Validated against `MfaLoginEnrollmentSessions`
+- Cannot be used as a full access token or as an MFA login challenge token
+
 ### Continuation Token (Flow Progression)
 
 - Used to prevent replay and enforce ordered flow progression
@@ -171,12 +190,18 @@ Current persistence model is defined by EF entities and migrations.
 - `GET /api/mfa/methods`
 - `GET /api/mfa/setup-options`
 
+### Login Enrollment Bootstrap (login enrollment token required)
+
+- `POST /api/mfa/login-enrollments`
+- `PATCH /api/mfa/login-enrollments/current`
+- `POST /api/mfa/login-enrollment-sessions/complete`
+
 ### Login Challenge (MFA token required)
 
 - `POST /api/mfa/challenges`
 - `PATCH /api/mfa/challenges/current`
 
-### Enrollment (full access token required)
+### Enrollment After Management Step-Up (full access token + recent step-up required)
 
 - `POST /api/mfa/enrollments`
 - `PATCH /api/mfa/enrollments/current`
@@ -234,7 +259,46 @@ Flow protections:
 - Conflict on replay/advanced state: `409`
 - Expired challenge semantics: `410`
 
-### 8.2 Enrollment Flow (sms/email)
+### 8.2 Login-Time Enrollment Bootstrap Flow
+
+```mermaid
+sequenceDiagram
+  participant Client
+  participant Auth as AuthController/AuthService
+  participant MfaC as MfaController
+  participant MfaS as MfaService
+  participant DB as SQL
+
+  Client->>Auth: POST /api/sessions (credentials)
+  Auth-->>Client: RequiresEnrollment + enrollmentToken + enrollmentSessionId + continuationToken
+
+  Client->>MfaC: POST /api/mfa/login-enrollments + login_enrollment token
+  MfaC->>MfaC: Validate token_type=login_enrollment, enrollment_sid, jti
+  MfaC->>DB: Validate active MfaLoginEnrollmentSession by jti/enrollment_sid/user
+  MfaC->>MfaS: StartLoginEnrollment(userId, enrollmentSessionId, request)
+  MfaS->>DB: Create enrollment challenge, rotate session continuation
+  MfaS-->>MfaC: enrollmentTransactionId + session/challenge continuation tokens
+
+  Client->>MfaC: PATCH /api/mfa/login-enrollments/current
+  MfaC->>MfaS: VerifyLoginEnrollment(userId, enrollmentSessionId, request)
+  MfaS->>DB: Verify challenge and rotate session continuation
+  MfaS-->>MfaC: ReadyToComplete + rotated session continuation
+
+  Client->>MfaC: POST /api/mfa/login-enrollment-sessions/complete
+  MfaC->>MfaS: CompleteLoginEnrollmentSession(userId, enrollmentSessionId, continuationToken)
+  MfaS->>DB: Consume bootstrap session
+  MfaS-->>MfaC: Authenticated + full tokens
+```
+
+Flow protections:
+
+- No full access token before explicit bootstrap completion
+- Dedicated least-privilege bootstrap token
+- Rotating continuation token on each step
+- Replay/advanced state conflict: `409`
+- Expired bootstrap session: `410`
+
+### 8.3 Enrollment Flow (sms/email)
 
 ```mermaid
 sequenceDiagram
@@ -264,11 +328,12 @@ sequenceDiagram
 Flow protections:
 
 - Full access token required
+- Recent management step-up required
 - Continuation token required for verify
 - Replay/advanced state conflict: `409`
 - Expired enrollment challenge: `410`
 
-### 8.3 Management Step-Up Flow (for sensitive operations)
+### 8.4 Management Step-Up Flow (for sensitive operations)
 
 ```mermaid
 sequenceDiagram

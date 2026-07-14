@@ -48,14 +48,17 @@ All controller responses follow this shape:
 12. `PATCH /api/fido2/enrollments/current` (`Authorize: access token`)
 13. `POST /api/fido2/authentications` (`Authorize: mfa token`)
 14. `PATCH /api/fido2/authentications/current` (`Authorize: mfa token`)
-15. `POST /api/mfa/management-sessions` (`Authorize: access token`)
-16. `POST /api/mfa/management-sessions/challenges/start` (`Authorize: access token`)
-17. `POST /api/mfa/management-sessions/challenges/verify` (`Authorize: access token`)
-18. `POST /api/mfa/management-sessions/complete` (`Authorize: access token`)
-19. `DELETE /api/mfa/management-sessions/{mfaTransactionId}` (`Authorize: access token`)
-20. `DELETE /api/mfa/methods/{method}` (`Authorize: access token`)
-21. `POST /api/mfa/methods/{method}/reconfigure` (`Authorize: access token`)
-22. `PATCH /api/mfa/methods/{method}/reconfigure/current` (`Authorize: access token`)
+9/*15. `POST /api/mfa/login-enrollments` (`Authorize: login_enrollment token`)
+16. `PATCH /api/mfa/login-enrollments/current` (`Authorize: login_enrollment token`)
+17. `POST /api/mfa/login-enrollment-sessions/complete` (`Authorize: login_enrollment token`)
+18. `POST /api/mfa/management-sessions` (`Authorize: access token`)
+19. `POST /api/mfa/management-sessions/challenges/start` (`Authorize: access token`)
+20. `POST /api/mfa/management-sessions/challenges/verify` (`Authorize: access token`)
+21. `POST /api/mfa/management-sessions/complete` (`Authorize: access token`)
+22. `DELETE /api/mfa/management-sessions/{mfaTransactionId}` (`Authorize: access token`)
+23. `DELETE /api/mfa/methods/{method}` (`Authorize: access token`)
+24. `POST /api/mfa/methods/{method}/reconfigure` (`Authorize: access token`)
+25. `PATCH /api/mfa/methods/{method}/reconfigure/current` (`Authorize: access token`)
 
 ## REST Alignment
 
@@ -65,6 +68,7 @@ The API uses a single RESTful route per endpoint. Legacy action-style aliases we
 
 - Full access tokens include a `jti` and are validated against server-side sessions.
 - MFA temp tokens include a `jti` and are validated against `MfaTempTokenSessions`.
+- Login enrollment tokens include a `jti` and are validated against `MfaLoginEnrollmentSessions`.
 - A new successful login invalidates previous active token sessions for that user.
 - `DELETE /api/sessions/current` revokes the current full token session.
 - `DELETE /api/mfa/sessions/current` revokes the current MFA temp token session.
@@ -140,6 +144,30 @@ Example MFA-required response:
 }
 ```
 
+3. Enrollment required before authentication can complete:
+- `data.status = RequiresEnrollment`
+- `data.enrollmentToken` present
+- `data.enrollmentSessionId` present
+- `data.enrollmentContinuationToken` present
+- `data.availableMfaSetupOptions` contains bootstrap-safe setup choices
+
+Example enrollment-required response:
+
+```json
+{
+  "success": true,
+  "message": "MFA enrollment required before completing authentication.",
+  "data": {
+    "status": "RequiresEnrollment",
+    "enrollmentToken": "...",
+    "enrollmentExpiresIn": 300,
+    "enrollmentSessionId": "11111111-1111-1111-1111-111111111111",
+    "enrollmentContinuationToken": "bootstrap-ct-1",
+    "availableMfaSetupOptions": ["email"]
+  }
+}
+```
+
 ## 2) Get Enabled MFA Methods For Current User
 
 ### `GET /api/mfa/methods`
@@ -171,9 +199,80 @@ Response data:
 }
 ```
 
-## 4) Enroll SMS/Email MFA Method
+## 4) Login-Time Enrollment Bootstrap
 
-Use this flow to register SMS or email MFA for a logged-in user.
+Use this flow only when `POST /api/sessions` returns `RequiresEnrollment`.
+
+### `POST /api/mfa/login-enrollments`
+
+Headers:
+- `Authorization: Bearer <login_enrollment_token>`
+
+Request example:
+
+```json
+{
+  "continuationToken": "bootstrap-ct-1",
+  "method": "email",
+  "contactValue": "user@example.com"
+}
+```
+
+Response data:
+
+```json
+{
+  "enrollmentSessionId": "11111111-1111-1111-1111-111111111111",
+  "enrollmentTransactionId": "22222222-2222-2222-2222-222222222222",
+  "sessionContinuationToken": "bootstrap-ct-2",
+  "challengeContinuationToken": "challenge-ct-1",
+  "method": "email",
+  "status": "pending",
+  "expiresAtUtc": "2026-07-14T12:00:00Z"
+}
+```
+
+### `PATCH /api/mfa/login-enrollments/current`
+
+Headers:
+- `Authorization: Bearer <login_enrollment_token>`
+
+Request example:
+
+```json
+{
+  "enrollmentTransactionId": "22222222-2222-2222-2222-222222222222",
+  "continuationToken": "challenge-ct-1",
+  "code": "123456"
+}
+```
+
+### `POST /api/mfa/login-enrollment-sessions/complete`
+
+Headers:
+- `Authorization: Bearer <login_enrollment_token>`
+
+Request example:
+
+```json
+{
+  "enrollmentSessionId": "11111111-1111-1111-1111-111111111111",
+  "continuationToken": "bootstrap-ct-3"
+}
+```
+
+Success result:
+
+- full access token is issued only here
+- bootstrap token/session becomes unusable
+
+## 5) Enroll SMS/Email MFA Method From Settings
+
+Use this flow to register SMS or email MFA for a logged-in user only after management step-up.
+
+Precondition:
+
+- a recent `manage_mfa` step-up session must exist
 
 ### `POST /api/mfa/enrollments`
 
@@ -234,7 +333,7 @@ Response data:
 }
 ```
 
-## 5) Complete Login With SMS/Email MFA
+## 6) Complete Login With SMS/Email MFA
 
 After `POST /api/sessions` returns allowed methods.
 
@@ -300,7 +399,7 @@ Success response returns tokens:
 }
 ```
 
-## 6) FIDO2 Enrollment Flow
+## 7) FIDO2 Enrollment Flow
 
 ### `POST /api/fido2/enrollments`
 
@@ -337,7 +436,7 @@ Note:
 - `attestationResponse` is produced by browser WebAuthn APIs and should be forwarded as-is.
 - Enrollment completion is validated server-side against the authenticated user that created the transaction.
 
-## 7) FIDO2 Login Flow
+## 8) FIDO2 Login Flow
 
 ### `POST /api/fido2/authentications`
 

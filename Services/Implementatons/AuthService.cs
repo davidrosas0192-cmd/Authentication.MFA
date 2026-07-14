@@ -14,6 +14,7 @@ public class AuthService : IAuthService
     private readonly ITokenService _tokenService;
     private readonly IAccessTokenSessionRepository _accessTokenSessionRepository;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
+    private readonly IMfaLoginEnrollmentSessionRepository _mfaLoginEnrollmentSessionRepository;
     private readonly IAuditService _auditService;
     private readonly IMfaService _mfaService;
     private readonly JwtOptions _jwtOptions;
@@ -24,6 +25,7 @@ public class AuthService : IAuthService
         ITokenService tokenService,
         IAccessTokenSessionRepository accessTokenSessionRepository,
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
+        IMfaLoginEnrollmentSessionRepository mfaLoginEnrollmentSessionRepository,
         IAuditService auditService,
         IMfaService mfaService,
         IOptions<JwtOptions> jwtOptions,
@@ -38,6 +40,9 @@ public class AuthService : IAuthService
         _mfaTempTokenSessionRepository =
             mfaTempTokenSessionRepository
             ?? throw new ArgumentNullException(nameof(mfaTempTokenSessionRepository));
+        _mfaLoginEnrollmentSessionRepository =
+            mfaLoginEnrollmentSessionRepository
+            ?? throw new ArgumentNullException(nameof(mfaLoginEnrollmentSessionRepository));
         _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
         _mfaService = mfaService ?? throw new ArgumentNullException(nameof(mfaService));
         _jwtOptions = jwtOptions.Value;
@@ -86,6 +91,7 @@ public class AuthService : IAuthService
         }
 
         var allowedMfaMethods = await _mfaService.GetAllowedMethodsAsync(user.Id, cancellationToken);
+        var availableSetupOptions = await _mfaService.GetAvailableSetupMethodsAsync(user.Id, cancellationToken);
 
         if (allowedMfaMethods.Count > 0)
         {
@@ -155,6 +161,72 @@ public class AuthService : IAuthService
                     AllowedMfaMethods = allowedMfaMethods,
                 },
                 "MFA verification required."
+            );
+        }
+
+        var bootstrapSetupOptions = availableSetupOptions
+            .Where(x => x == MfaMethodTypes.Sms || x == MfaMethodTypes.Email)
+            .ToList();
+
+        if (bootstrapSetupOptions.Count > 0)
+        {
+            await _accessTokenSessionRepository.RevokeAllActiveByUserAsync(
+                user.Id,
+                "new_login",
+                cancellationToken
+            );
+            await _mfaTempTokenSessionRepository.RevokeAllActiveByUserAsync(
+                user.Id,
+                "new_login",
+                cancellationToken
+            );
+            await _mfaLoginEnrollmentSessionRepository.RevokeAllActiveByUserAsync(
+                user.Id,
+                cancellationToken
+            );
+
+            var tokenJti = Guid.NewGuid().ToString("N");
+            var (enrollmentSessionId, continuationToken) = await _mfaService.StartLoginEnrollmentSessionAsync(
+                user.Id,
+                tokenJti,
+                ipAddress,
+                userAgent,
+                cancellationToken
+            );
+            var enrollmentToken = _tokenService.CreateLoginEnrollmentToken(user, enrollmentSessionId, tokenJti);
+
+            await _auditService.TrackAuthenticationEventAsync(
+                user.Id,
+                user.Username,
+                "password_login",
+                "password",
+                true,
+                null,
+                cancellationToken
+            );
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.password.login_requires_enrollment",
+                "Information",
+                true,
+                user.Id,
+                user.Username,
+                null,
+                new { availableSetupOptions = bootstrapSetupOptions },
+                cancellationToken
+            );
+
+            return Result<LoginResponse>.Success(
+                new LoginResponse
+                {
+                    Status = "RequiresEnrollment",
+                    EnrollmentToken = enrollmentToken,
+                    EnrollmentExpiresIn = _mfaJwtOptions.ExpirationMinutes * 60,
+                    EnrollmentSessionId = enrollmentSessionId,
+                    EnrollmentContinuationToken = continuationToken,
+                    AvailableMfaSetupOptions = bootstrapSetupOptions,
+                },
+                "MFA enrollment required before completing authentication."
             );
         }
 

@@ -20,6 +20,7 @@ public class MfaService : IMfaService
     private readonly IUserMfaMethodRepository _mfaMethodRepository;
     private readonly IUserRecoveryCodeRepository _userRecoveryCodeRepository;
     private readonly IMfaChallengeRepository _mfaChallengeRepository;
+    private readonly IMfaLoginEnrollmentSessionRepository _mfaLoginEnrollmentSessionRepository;
     private readonly IMfaManagementSessionRepository _mfaManagementSessionRepository;
     private readonly IUserRepository _userRepository;
     private readonly ITwilioOtpService _twilioOtpService;
@@ -33,6 +34,7 @@ public class MfaService : IMfaService
         IUserMfaMethodRepository mfaMethodRepository,
         IUserRecoveryCodeRepository userRecoveryCodeRepository,
         IMfaChallengeRepository mfaChallengeRepository,
+        IMfaLoginEnrollmentSessionRepository mfaLoginEnrollmentSessionRepository,
         IMfaManagementSessionRepository mfaManagementSessionRepository,
         IUserRepository userRepository,
         ITwilioOtpService twilioOtpService,
@@ -46,6 +48,7 @@ public class MfaService : IMfaService
         _mfaMethodRepository = mfaMethodRepository;
         _userRecoveryCodeRepository = userRecoveryCodeRepository;
         _mfaChallengeRepository = mfaChallengeRepository;
+        _mfaLoginEnrollmentSessionRepository = mfaLoginEnrollmentSessionRepository;
         _mfaManagementSessionRepository = mfaManagementSessionRepository;
         _userRepository = userRepository;
         _twilioOtpService = twilioOtpService;
@@ -95,6 +98,44 @@ public class MfaService : IMfaService
         return allOptions
             .Where(x => !enabled.Contains(x, StringComparer.OrdinalIgnoreCase))
             .ToList();
+    }
+
+    public async Task<(Guid SessionId, string ContinuationToken)> StartLoginEnrollmentSessionAsync(
+        long userId,
+        string tokenJti,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        var session = new MfaLoginEnrollmentSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Status = MfaLoginEnrollmentSessionStatuses.EnrollmentRequired,
+            ContinuationToken = CreateContinuationToken(),
+            StepVersion = 1,
+            TokenJti = tokenJti,
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow,
+        };
+
+        await _mfaLoginEnrollmentSessionRepository.AddAsync(session, cancellationToken);
+
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.mfa.login_enrollment.start",
+            "Information",
+            true,
+            userId,
+            null,
+            null,
+            new { sessionId = session.Id, ipAddress, userAgent },
+            cancellationToken
+        );
+
+        return (session.Id, session.ContinuationToken);
     }
 
     public async Task<Result<StartMfaManagementSessionResponse>> StartManagementSessionAsync(
@@ -1068,6 +1109,110 @@ public class MfaService : IMfaService
         CancellationToken cancellationToken
     )
     {
+        var hasRecentStepUp = await HasRecentManagementStepUpAsync(userId, cancellationToken);
+        if (!hasRecentStepUp)
+        {
+            return Result<StartMfaEnrollmentResponse>.Failure(
+                "Management step-up is required before enrolling additional MFA methods.",
+                StatusCodes.Status403Forbidden
+            );
+        }
+
+        return await StartEnrollmentCoreAsync(userId, request, ipAddress, userAgent, cancellationToken);
+    }
+
+    public async Task<Result<StartLoginEnrollmentResponse>> StartLoginEnrollmentAsync(
+        long userId,
+        Guid enrollmentSessionId,
+        StartLoginEnrollmentRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        var session = await _mfaLoginEnrollmentSessionRepository.GetByIdAsync(
+            enrollmentSessionId,
+            cancellationToken
+        );
+
+        if (session is null || session.UserId != userId)
+        {
+            return Result<StartLoginEnrollmentResponse>.Failure(
+                "Invalid login enrollment session.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (session.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            return Result<StartLoginEnrollmentResponse>.Failure(
+                "Login enrollment session has expired.",
+                StatusCodes.Status410Gone
+            );
+        }
+
+        if (session.Status == MfaLoginEnrollmentSessionStatuses.Completed || session.Status == MfaLoginEnrollmentSessionStatuses.Cancelled)
+        {
+            return Result<StartLoginEnrollmentResponse>.Failure(
+                "LOGIN_ENROLLMENT_ALREADY_COMPLETED",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        if (!string.Equals(session.ContinuationToken, request.ContinuationToken, StringComparison.Ordinal))
+        {
+            return Result<StartLoginEnrollmentResponse>.Failure(
+                "LOGIN_ENROLLMENT_ALREADY_ADVANCED",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        var startResult = await StartEnrollmentCoreAsync(
+            userId,
+            new StartMfaEnrollmentRequest { Method = request.Method, ContactValue = request.ContactValue },
+            ipAddress,
+            userAgent,
+            cancellationToken
+        );
+
+        if (!startResult.IsSuccess || startResult.Data is null)
+        {
+            return Result<StartLoginEnrollmentResponse>.Failure(
+                startResult.Error ?? startResult.Message ?? "Unable to start login enrollment.",
+                startResult.StatusCode ?? StatusCodes.Status400BadRequest
+            );
+        }
+
+        session.Status = MfaLoginEnrollmentSessionStatuses.EnrollmentInProgress;
+        session.ChallengeId = startResult.Data.EnrollmentTransactionId;
+        session.ContinuationToken = CreateContinuationToken();
+        session.StepVersion += 1;
+        session.UpdatedAtUtc = DateTime.UtcNow;
+        await _mfaLoginEnrollmentSessionRepository.UpdateAsync(session, cancellationToken);
+
+        return Result<StartLoginEnrollmentResponse>.Success(
+            new StartLoginEnrollmentResponse
+            {
+                EnrollmentSessionId = session.Id,
+                EnrollmentTransactionId = startResult.Data.EnrollmentTransactionId,
+                SessionContinuationToken = session.ContinuationToken,
+                ChallengeContinuationToken = startResult.Data.ContinuationToken,
+                Method = startResult.Data.Method,
+                Status = startResult.Data.Status,
+                ExpiresAtUtc = startResult.Data.ExpiresAtUtc,
+            },
+            "Login enrollment challenge started."
+        );
+    }
+
+    private async Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentCoreAsync(
+        long userId,
+        StartMfaEnrollmentRequest request,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
         var normalizedMethod = request.Method.Trim().ToLowerInvariant();
         if (normalizedMethod != MfaMethodTypes.Sms && normalizedMethod != MfaMethodTypes.Email)
         {
@@ -1137,6 +1282,213 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentAsync(
+        long userId,
+        VerifyMfaEnrollmentRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var hasRecentStepUp = await HasRecentManagementStepUpAsync(userId, cancellationToken);
+        if (!hasRecentStepUp)
+        {
+            return Result<VerifyMfaEnrollmentResponse>.Failure(
+                "Management step-up is required before enrolling additional MFA methods.",
+                StatusCodes.Status403Forbidden
+            );
+        }
+
+        return await VerifyEnrollmentCoreAsync(userId, request, cancellationToken);
+    }
+
+    public async Task<Result<VerifyLoginEnrollmentResponse>> VerifyLoginEnrollmentAsync(
+        long userId,
+        Guid enrollmentSessionId,
+        VerifyLoginEnrollmentRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var session = await _mfaLoginEnrollmentSessionRepository.GetByIdAsync(
+            enrollmentSessionId,
+            cancellationToken
+        );
+
+        if (session is null || session.UserId != userId)
+        {
+            return Result<VerifyLoginEnrollmentResponse>.Failure(
+                "Invalid login enrollment session.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (session.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            return Result<VerifyLoginEnrollmentResponse>.Failure(
+                "Login enrollment session has expired.",
+                StatusCodes.Status410Gone
+            );
+        }
+
+        var verifyResult = await VerifyEnrollmentCoreAsync(
+            userId,
+            new VerifyMfaEnrollmentRequest
+            {
+                EnrollmentTransactionId = request.EnrollmentTransactionId,
+                ContinuationToken = request.ContinuationToken,
+                Code = request.Code,
+            },
+            cancellationToken
+        );
+
+        if (!verifyResult.IsSuccess || verifyResult.Data is null)
+        {
+            return Result<VerifyLoginEnrollmentResponse>.Failure(
+                verifyResult.Error ?? verifyResult.Message ?? "Unable to verify login enrollment.",
+                verifyResult.StatusCode ?? StatusCodes.Status400BadRequest
+            );
+        }
+
+        session.Status = MfaLoginEnrollmentSessionStatuses.ReadyToComplete;
+        session.ContinuationToken = CreateContinuationToken();
+        session.StepVersion += 1;
+        session.UpdatedAtUtc = DateTime.UtcNow;
+        await _mfaLoginEnrollmentSessionRepository.UpdateAsync(session, cancellationToken);
+
+        var remainingSetupOptions = (await GetAvailableSetupMethodsAsync(userId, cancellationToken))
+            .Where(x => x == MfaMethodTypes.Sms || x == MfaMethodTypes.Email)
+            .ToList();
+
+        return Result<VerifyLoginEnrollmentResponse>.Success(
+            new VerifyLoginEnrollmentResponse
+            {
+                EnrollmentSessionId = session.Id,
+                SessionStatus = session.Status,
+                SessionContinuationToken = session.ContinuationToken,
+                Method = verifyResult.Data.Method,
+                IsVerified = verifyResult.Data.IsVerified,
+                RecoveryCodes = verifyResult.Data.RecoveryCodes,
+                RemainingSetupOptions = remainingSetupOptions,
+            },
+            verifyResult.Message ?? "Login enrollment verified."
+        );
+    }
+
+    public async Task<Result<LoginResponse>> CompleteLoginEnrollmentSessionAsync(
+        long userId,
+        Guid enrollmentSessionId,
+        string continuationToken,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        var session = await _mfaLoginEnrollmentSessionRepository.GetByIdAsync(
+            enrollmentSessionId,
+            cancellationToken
+        );
+
+        if (session is null || session.UserId != userId)
+        {
+            return Result<LoginResponse>.Failure(
+                "Login enrollment session not found.",
+                StatusCodes.Status404NotFound
+            );
+        }
+
+        if (session.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            return Result<LoginResponse>.Failure(
+                "Login enrollment session has expired.",
+                StatusCodes.Status410Gone
+            );
+        }
+
+        if (session.Status == MfaLoginEnrollmentSessionStatuses.Completed || session.Status == MfaLoginEnrollmentSessionStatuses.Cancelled)
+        {
+            return Result<LoginResponse>.Failure(
+                "LOGIN_ENROLLMENT_ALREADY_COMPLETED",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        if (!string.Equals(session.ContinuationToken, continuationToken, StringComparison.Ordinal))
+        {
+            return Result<LoginResponse>.Failure(
+                "LOGIN_ENROLLMENT_ALREADY_ADVANCED",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        var allowedMethods = await GetAllowedMethodsAsync(userId, cancellationToken);
+        if (allowedMethods.Count == 0)
+        {
+            return Result<LoginResponse>.Failure(
+                "At least one verified MFA method is required before completing authentication.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            return Result<LoginResponse>.Failure("User not found.", StatusCodes.Status404NotFound);
+        }
+
+        user.LastLoginAtUtc = DateTime.UtcNow;
+        await _userRepository.UpdateAsync(user, cancellationToken);
+
+        await _accessTokenSessionRepository.RevokeAllActiveByUserAsync(user.Id, "new_login", cancellationToken);
+        await _mfaTempTokenSessionRepository.RevokeAllActiveByUserAsync(user.Id, "new_login", cancellationToken);
+        await _mfaLoginEnrollmentSessionRepository.RevokeAllActiveByUserAsync(user.Id, cancellationToken);
+
+        session.Status = MfaLoginEnrollmentSessionStatuses.Completed;
+        session.CompletedAtUtc = DateTime.UtcNow;
+        session.ExpiresAtUtc = DateTime.UtcNow;
+        session.UpdatedAtUtc = DateTime.UtcNow;
+        await _mfaLoginEnrollmentSessionRepository.UpdateAsync(session, cancellationToken);
+
+        var accessTokenJti = Guid.NewGuid().ToString("N");
+        var accessToken = _tokenService.CreateAccessToken(user, accessTokenJti);
+        var refreshToken = _tokenService.CreateRefreshToken();
+
+        await _accessTokenSessionRepository.AddAsync(
+            new AccessTokenSession
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                TokenJti = accessTokenJti,
+                IssuedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
+                IpAddress = ipAddress,
+                UserAgent = userAgent,
+            },
+            cancellationToken
+        );
+
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.mfa.login_enrollment.completed",
+            "Information",
+            true,
+            user.Id,
+            user.Username,
+            null,
+            new { sessionId = session.Id, allowedMethods },
+            cancellationToken
+        );
+
+        return Result<LoginResponse>.Success(
+            new LoginResponse
+            {
+                Status = "Authenticated",
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                ExpiresIn = 15 * 60,
+                AllowedMfaMethods = allowedMethods,
+            },
+            "Authentication succeeded."
+        );
+    }
+
+    private async Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentCoreAsync(
         long userId,
         VerifyMfaEnrollmentRequest request,
         CancellationToken cancellationToken

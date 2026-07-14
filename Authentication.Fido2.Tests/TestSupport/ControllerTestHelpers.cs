@@ -22,7 +22,8 @@ internal static class ControllerTestHelpers
         long userId,
         Guid? mfaTransactionId = null,
         string? tokenType = null,
-        string? tokenJti = null
+        string? tokenJti = null,
+        Guid? enrollmentSessionId = null
     )
     {
         var claims = new List<Claim>
@@ -39,6 +40,11 @@ internal static class ControllerTestHelpers
         if (mfaTransactionId.HasValue)
         {
             claims.Add(new Claim("mfa_tx", mfaTransactionId.Value.ToString()));
+        }
+
+        if (enrollmentSessionId.HasValue)
+        {
+            claims.Add(new Claim("enrollment_sid", enrollmentSessionId.Value.ToString()));
         }
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));

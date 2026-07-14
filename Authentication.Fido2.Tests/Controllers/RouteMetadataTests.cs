@@ -20,6 +20,9 @@ public class RouteMetadataTests
         AssertContainsTemplates(typeof(MfaController), "VerifyChallenge", "challenges/current");
         AssertContainsTemplates(typeof(MfaController), "StartEnrollment", "enrollments");
         AssertContainsTemplates(typeof(MfaController), "VerifyEnrollment", "enrollments/current");
+        AssertContainsTemplates(typeof(MfaController), "StartLoginEnrollment", "login-enrollments");
+        AssertContainsTemplates(typeof(MfaController), "VerifyLoginEnrollment", "login-enrollments/current");
+        AssertContainsTemplates(typeof(MfaController), "CompleteLoginEnrollmentSession", "login-enrollment-sessions/complete");
         AssertContainsTemplates(typeof(MfaController), "StartManagementSession", "management-sessions");
         AssertContainsTemplates(typeof(MfaController), "StartManagementChallenge", "management-sessions/challenges/start");
         AssertContainsTemplates(typeof(MfaController), "VerifyManagementChallenge", "management-sessions/challenges/verify");

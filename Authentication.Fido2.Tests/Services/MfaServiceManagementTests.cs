@@ -149,7 +149,7 @@ public class MfaServiceManagementTests
     }
 
     [Fact]
-    public async Task VerifyEnrollmentAsync_ReturnsGone_WhenEnrollmentChallengeIsExpired()
+    public async Task VerifyEnrollmentAsync_ReturnsForbidden_WhenStepUpIsMissing_BeforeChallengeEvaluation()
     {
         var challenge = new MfaChallenge
         {
@@ -180,7 +180,7 @@ public class MfaServiceManagementTests
         );
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(StatusCodes.Status410Gone, result.StatusCode);
+        Assert.Equal(StatusCodes.Status403Forbidden, result.StatusCode);
     }
 
     private static MfaService BuildService(
@@ -192,6 +192,7 @@ public class MfaServiceManagementTests
             new FakeUserMfaMethodRepository(),
             new FakeUserRecoveryCodeRepository(),
             challengeRepository,
+            new FakeMfaLoginEnrollmentSessionRepository(),
             managementSessionRepository,
             new FakeUserRepository(),
             new FakeTwilioOtpService(),
@@ -208,6 +209,21 @@ public class MfaServiceManagementTests
                 RefreshTokenExpirationDays = 7,
             })
         );
+    }
+
+    private sealed class FakeMfaLoginEnrollmentSessionRepository : IMfaLoginEnrollmentSessionRepository
+    {
+        public Task AddAsync(MfaLoginEnrollmentSession session, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<MfaLoginEnrollmentSession?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken) =>
+            Task.FromResult<MfaLoginEnrollmentSession?>(null);
+
+        public Task<MfaLoginEnrollmentSession?> GetActiveByJtiAsync(string tokenJti, CancellationToken cancellationToken) =>
+            Task.FromResult<MfaLoginEnrollmentSession?>(null);
+
+        public Task UpdateAsync(MfaLoginEnrollmentSession session, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task RevokeAllActiveByUserAsync(long userId, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class FakeMfaChallengeRepository : IMfaChallengeRepository
@@ -358,6 +374,8 @@ public class MfaServiceManagementTests
     private sealed class FakeTokenService : ITokenService
     {
         public string CreateAccessToken(User user, string tokenJti) => "access";
+
+        public string CreateLoginEnrollmentToken(User user, Guid enrollmentSessionId, string tokenJti) => "login-enrollment";
 
         public string CreateMfaToken(User user, Guid mfaTransactionId, string tokenJti) => "mfa";
 

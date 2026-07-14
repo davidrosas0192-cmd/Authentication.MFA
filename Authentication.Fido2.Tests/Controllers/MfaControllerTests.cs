@@ -611,4 +611,114 @@ public class MfaControllerTests
         Assert.Equal(1, service.CompleteReconfigureMethodCallCount);
         Assert.Equal("email", service.LastMethodRouteValue);
     }
+
+    [Fact]
+    public async Task StartLoginEnrollment_ReturnsOk_WhenBootstrapTokenIsValid()
+    {
+        var sessionId = Guid.NewGuid();
+        var tokenJti = "login-enrollment-jti";
+        var service = new RecordingMfaService
+        {
+            StartLoginEnrollmentResultToReturn = Result<StartLoginEnrollmentResponse>.Success(new StartLoginEnrollmentResponse
+            {
+                EnrollmentSessionId = sessionId,
+                EnrollmentTransactionId = Guid.NewGuid(),
+                SessionContinuationToken = "session-ct-2",
+                ChallengeContinuationToken = "challenge-ct-1",
+                Method = "email",
+                Status = "pending",
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            }),
+        };
+        var loginRepo = new RecordingMfaLoginEnrollmentSessionRepository
+        {
+            ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaLoginEnrollmentSession
+            {
+                Id = sessionId,
+                UserId = 42,
+                TokenJti = tokenJti,
+                Status = "enrollment_required",
+                ContinuationToken = "session-ct-1",
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            },
+        };
+
+        var controller = new MfaController(service, loginRepo, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(
+                    ControllerTestHelpers.CreateUserPrincipal(42, enrollmentSessionId: sessionId, tokenType: "login_enrollment", tokenJti: tokenJti)
+                ),
+            },
+        };
+
+        var result = await controller.StartLoginEnrollment(
+            new StartLoginEnrollmentRequest
+            {
+                ContinuationToken = "session-ct-1",
+                Method = "email",
+                ContactValue = "user@example.com",
+            },
+            CancellationToken.None
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, service.StartLoginEnrollmentCallCount);
+    }
+
+    [Fact]
+    public async Task VerifyLoginEnrollment_ReturnsOk_WhenBootstrapTokenIsValid()
+    {
+        var sessionId = Guid.NewGuid();
+        var tokenJti = "login-enrollment-jti-2";
+        var service = new RecordingMfaService
+        {
+            VerifyLoginEnrollmentResultToReturn = Result<VerifyLoginEnrollmentResponse>.Success(new VerifyLoginEnrollmentResponse
+            {
+                EnrollmentSessionId = sessionId,
+                SessionStatus = "ready_to_complete",
+                SessionContinuationToken = "session-ct-3",
+                Method = "email",
+                IsVerified = true,
+                RecoveryCodes = ["ABCD-EFGH-IJKL"],
+                RemainingSetupOptions = ["sms"],
+            }),
+        };
+        var loginRepo = new RecordingMfaLoginEnrollmentSessionRepository
+        {
+            ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaLoginEnrollmentSession
+            {
+                Id = sessionId,
+                UserId = 42,
+                TokenJti = tokenJti,
+                Status = "enrollment_in_progress",
+                ContinuationToken = "session-ct-2",
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            },
+        };
+
+        var controller = new MfaController(service, loginRepo, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(
+                    ControllerTestHelpers.CreateUserPrincipal(42, enrollmentSessionId: sessionId, tokenType: "login_enrollment", tokenJti: tokenJti)
+                ),
+            },
+        };
+
+        var result = await controller.VerifyLoginEnrollment(
+            new VerifyLoginEnrollmentRequest
+            {
+                EnrollmentTransactionId = Guid.NewGuid(),
+                ContinuationToken = "challenge-ct-1",
+                Code = "123456",
+            },
+            CancellationToken.None
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, service.VerifyLoginEnrollmentCallCount);
+    }
 }

@@ -8,8 +8,11 @@ The schema covers:
 
 - user accounts
 - MFA method registry and MFA challenges
+- login-time MFA enrollment bootstrap sessions
+- MFA management step-up sessions
 - FIDO2 credentials and transactions
 - access token and MFA temp token session tracking
+- recovery code batches and one-time recovery codes
 - authentication and security audit events
 
 ## Database Diagram
@@ -21,9 +24,13 @@ erDiagram
     Users ||--o{ UserFido2Credentials : has
     Users ||--o{ UserMfaMethods : has
     Users ||--o{ MfaChallenges : has
+    Users ||--o{ MfaLoginEnrollmentSessions : has
+    Users ||--o{ MfaManagementSessions : has
     Users ||--o{ Fido2Transactions : has
     Users ||--o{ AccessTokenSessions : has
     Users ||--o{ MfaTempTokenSessions : has
+    Users ||--o{ UserRecoveryCodeBatches : has
+    UserRecoveryCodeBatches ||--o{ UserRecoveryCodes : has
     Users ||--o{ AuthenticationAuditEvents : has
     Users ||--o{ SecurityAuditEvents : has
 
@@ -67,6 +74,8 @@ erDiagram
         uniqueidentifier Id PK
         bigint UserId FK
         string Purpose
+        string ContinuationToken
+        int StepVersion
         string Method
         string Provider
         string ProviderRequestId
@@ -78,6 +87,33 @@ erDiagram
         string IpAddress
         string UserAgent
         datetime2 CreatedAtUtc
+    }
+
+    MfaLoginEnrollmentSessions {
+        uniqueidentifier Id PK
+        bigint UserId FK
+        string Status
+        string ContinuationToken
+        int StepVersion
+        string TokenJti
+        uniqueidentifier ChallengeId
+        datetime2 ExpiresAtUtc
+        datetime2 CompletedAtUtc
+        datetime2 CreatedAtUtc
+        datetime2 UpdatedAtUtc
+    }
+
+    MfaManagementSessions {
+        uniqueidentifier Id PK
+        bigint UserId FK
+        string Status
+        string ContinuationToken
+        int StepVersion
+        uniqueidentifier ChallengeId
+        datetime2 ExpiresAtUtc
+        datetime2 VerifiedAtUtc
+        datetime2 CreatedAtUtc
+        datetime2 UpdatedAtUtc
     }
 
     Fido2Transactions {
@@ -116,6 +152,22 @@ erDiagram
         datetime2 RevokedAtUtc
         string IpAddress
         string UserAgent
+    }
+
+    UserRecoveryCodeBatches {
+        uniqueidentifier Id PK
+        bigint UserId FK
+        datetime2 IssuedAtUtc
+        datetime2 ReplacedAtUtc
+    }
+
+    UserRecoveryCodes {
+        uniqueidentifier Id PK
+        uniqueidentifier BatchId FK
+        bigint UserId FK
+        string CodeHash
+        datetime2 CreatedAtUtc
+        datetime2 UsedAtUtc
     }
 
     AuthenticationAuditEvents {
@@ -180,8 +232,26 @@ Stores enabled MFA methods per user.
 Tracks MFA challenge lifecycle for login and enrollment.
 
 - `Purpose` identifies the flow, such as login or enrollment.
+- `ContinuationToken` and `StepVersion` enforce anti-replay and ordered flow progression.
 - `ProviderRequestId` stores the external provider reference when present.
 - Indexed by user, purpose, status, and expiration for fast validation.
+
+### MfaManagementSessions
+
+Tracks dedicated step-up sessions used before sensitive MFA administration operations.
+
+- Stores session state separately from login/enrollment challenges.
+- Uses `ContinuationToken` and `StepVersion` for step progression and replay resistance.
+- `ChallengeId` links the current step-up challenge when one exists.
+
+### MfaLoginEnrollmentSessions
+
+Tracks dedicated bootstrap sessions used when login cannot complete until the user enrolls at least one MFA factor.
+
+- Stores a separate least-privilege transitional session before full authentication is granted.
+- Uses `ContinuationToken` and `StepVersion` for replay resistance and ordered progression.
+- `TokenJti` binds the bootstrap JWT to a server-side session record.
+- `CompletedAtUtc` marks explicit bootstrap completion before full access-token issuance.
 
 ### Fido2Transactions
 
@@ -201,6 +271,20 @@ Tracks short-lived MFA JWT sessions by `jti`.
 - One row is created per MFA login transaction.
 - The row is consumed or revoked when the MFA step completes.
 
+### UserRecoveryCodeBatches
+
+Tracks issuance and rotation of recovery code sets.
+
+- One batch groups a set of codes issued together.
+- `ReplacedAtUtc` indicates the batch has been superseded.
+
+### UserRecoveryCodes
+
+Stores one-time recovery codes.
+
+- Codes are stored hashed only (`CodeHash`).
+- `UsedAtUtc` indicates one-time consumption.
+
 ### AuthenticationAuditEvents
 
 Audit trail for authentication-specific events.
@@ -216,7 +300,7 @@ The canonical schema script is stored in [DATABASE_SCHEMA.sql](./DATABASE_SCHEMA
 ## Notes
 
 - The current implementation uses SQL Server and EF Core migrations as the source of truth.
-- This document reflects the implemented schema, including the token-session tables and OWASP audit tables.
+- This document reflects the implemented schema, including token-session tables, login enrollment bootstrap sessions, MFA management sessions, recovery code tables, and OWASP audit tables.
 - The SQL script is a recreate-style reference script for local documentation and review.
 - The seed row shown in the SQL script matches the current development seed used by the project.
 - If you add a new table or column, update the migration history and regenerate this document.

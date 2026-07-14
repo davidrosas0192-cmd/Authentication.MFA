@@ -7,6 +7,7 @@ using Authentication.Fido2.Options;
 using Authentication.Fido2.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -18,10 +19,29 @@ namespace Authentication.Fido2.Controllers;
 public class MfaController : ControllerBase
 {
     private readonly IMfaService _mfaService;
+    private readonly IMfaLoginEnrollmentSessionRepository _mfaLoginEnrollmentSessionRepository;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly IAuditService _auditService;
     private readonly ILogger<MfaController> _logger;
     private readonly MfaApiPolicyOptions _mfaApiPolicyOptions;
+
+    [ActivatorUtilitiesConstructor]
+    public MfaController(
+        IMfaService mfaService,
+        IMfaLoginEnrollmentSessionRepository mfaLoginEnrollmentSessionRepository,
+        IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
+        IAuditService auditService,
+        ILogger<MfaController> logger,
+        IOptions<MfaApiPolicyOptions>? mfaApiPolicyOptions = null
+    )
+    {
+        _mfaService = mfaService;
+        _mfaLoginEnrollmentSessionRepository = mfaLoginEnrollmentSessionRepository;
+        _mfaTempTokenSessionRepository = mfaTempTokenSessionRepository;
+        _auditService = auditService;
+        _logger = logger;
+        _mfaApiPolicyOptions = mfaApiPolicyOptions?.Value ?? new MfaApiPolicyOptions();
+    }
 
     public MfaController(
         IMfaService mfaService,
@@ -30,12 +50,15 @@ public class MfaController : ControllerBase
         ILogger<MfaController> logger,
         IOptions<MfaApiPolicyOptions>? mfaApiPolicyOptions = null
     )
+        : this(
+            mfaService,
+            new NullMfaLoginEnrollmentSessionRepository(),
+            mfaTempTokenSessionRepository,
+            auditService,
+            logger,
+            mfaApiPolicyOptions
+        )
     {
-        _mfaService = mfaService;
-        _mfaTempTokenSessionRepository = mfaTempTokenSessionRepository;
-        _auditService = auditService;
-        _logger = logger;
-        _mfaApiPolicyOptions = mfaApiPolicyOptions?.Value ?? new MfaApiPolicyOptions();
     }
 
     [Authorize]
@@ -231,6 +254,103 @@ public class MfaController : ControllerBase
         {
             _logger.LogError(ex, "An error occurred starting MFA enrollment.");
             return Problem("An error occurred while starting MFA enrollment.");
+        }
+    }
+
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [HttpPost("login-enrollments")]
+    public async Task<IActionResult> StartLoginEnrollment(
+        [FromBody] StartLoginEnrollmentRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var enrollmentContextResult = await ValidateLoginEnrollmentTokenContext(cancellationToken);
+            if (enrollmentContextResult.ErrorResult is not null)
+            {
+                return enrollmentContextResult.ErrorResult;
+            }
+
+            var response = await _mfaService.StartLoginEnrollmentAsync(
+                enrollmentContextResult.UserId,
+                enrollmentContextResult.EnrollmentSessionId,
+                request,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred starting login-time MFA enrollment.");
+            return Problem("An error occurred while starting login-time MFA enrollment.");
+        }
+    }
+
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [HttpPatch("login-enrollments/current")]
+    public async Task<IActionResult> VerifyLoginEnrollment(
+        [FromBody] VerifyLoginEnrollmentRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var enrollmentContextResult = await ValidateLoginEnrollmentTokenContext(cancellationToken);
+            if (enrollmentContextResult.ErrorResult is not null)
+            {
+                return enrollmentContextResult.ErrorResult;
+            }
+
+            var response = await _mfaService.VerifyLoginEnrollmentAsync(
+                enrollmentContextResult.UserId,
+                enrollmentContextResult.EnrollmentSessionId,
+                request,
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred verifying login-time MFA enrollment.");
+            return Problem("An error occurred while verifying login-time MFA enrollment.");
+        }
+    }
+
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [HttpPost("login-enrollment-sessions/complete")]
+    public async Task<IActionResult> CompleteLoginEnrollmentSession(
+        [FromBody] CompleteLoginEnrollmentSessionRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var enrollmentContextResult = await ValidateLoginEnrollmentTokenContext(cancellationToken);
+            if (enrollmentContextResult.ErrorResult is not null)
+            {
+                return enrollmentContextResult.ErrorResult;
+            }
+
+            var response = await _mfaService.CompleteLoginEnrollmentSessionAsync(
+                enrollmentContextResult.UserId,
+                request.EnrollmentSessionId,
+                request.ContinuationToken,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred completing login-time MFA enrollment.");
+            return Problem("An error occurred while completing login-time MFA enrollment.");
         }
     }
 
@@ -606,6 +726,62 @@ public class MfaController : ControllerBase
         return (userId, mfaTransactionId, null);
     }
 
+    private async Task<(long UserId, Guid EnrollmentSessionId, IActionResult? ErrorResult)> ValidateLoginEnrollmentTokenContext(
+        CancellationToken cancellationToken
+    )
+    {
+        var hasUserId = TryGetUserId(User, out var userId);
+        var tokenType = User.FindFirst("token_type")?.Value;
+        var enrollmentSessionIdValue = User.FindFirst("enrollment_sid")?.Value;
+        var tokenJti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+
+        if (
+            !hasUserId
+            || !string.Equals(tokenType, "login_enrollment", StringComparison.OrdinalIgnoreCase)
+            || !Guid.TryParse(enrollmentSessionIdValue, out var enrollmentSessionId)
+            || string.IsNullOrWhiteSpace(tokenJti)
+        )
+        {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.mfa.login_enrollment.token_validation",
+                "Warning",
+                false,
+                null,
+                null,
+                "Invalid login enrollment token",
+                null,
+                cancellationToken
+            );
+
+            return (0, Guid.Empty, Unauthorized(new { message = "Invalid login enrollment token." }));
+        }
+
+        var session = await _mfaLoginEnrollmentSessionRepository.GetActiveByJtiAsync(
+            tokenJti,
+            cancellationToken
+        );
+
+        if (session is null || session.UserId != userId || session.Id != enrollmentSessionId)
+        {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.mfa.login_enrollment.token_validation",
+                "Warning",
+                false,
+                userId,
+                null,
+                "Login enrollment token expired or not valid",
+                new { tokenJti, enrollmentSessionId },
+                cancellationToken
+            );
+
+            return (0, Guid.Empty, Unauthorized(new { message = "Login enrollment token is expired or not valid." }));
+        }
+
+        return (userId, enrollmentSessionId, null);
+    }
+
     private static bool TryGetUserId(ClaimsPrincipal user, out long userId)
     {
         var userIdValue = user.FindFirst("sub")?.Value
@@ -613,5 +789,20 @@ public class MfaController : ControllerBase
             ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
         return long.TryParse(userIdValue, out userId);
+    }
+
+    private sealed class NullMfaLoginEnrollmentSessionRepository : IMfaLoginEnrollmentSessionRepository
+    {
+        public Task AddAsync(Entities.MfaLoginEnrollmentSession session, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<Entities.MfaLoginEnrollmentSession?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken) =>
+            Task.FromResult<Entities.MfaLoginEnrollmentSession?>(null);
+
+        public Task<Entities.MfaLoginEnrollmentSession?> GetActiveByJtiAsync(string tokenJti, CancellationToken cancellationToken) =>
+            Task.FromResult<Entities.MfaLoginEnrollmentSession?>(null);
+
+        public Task UpdateAsync(Entities.MfaLoginEnrollmentSession session, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task RevokeAllActiveByUserAsync(long userId, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

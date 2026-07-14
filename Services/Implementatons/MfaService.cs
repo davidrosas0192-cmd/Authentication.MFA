@@ -1709,6 +1709,13 @@ public class MfaService : IMfaService
 
     private static string CreateContinuationToken()
     {
-        return Guid.NewGuid().ToString("N");
+        Span<byte> buffer = stackalloc byte[32];
+        RandomNumberGenerator.Fill(buffer);
+
+        return Convert
+            .ToBase64String(buffer)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
     }
 }

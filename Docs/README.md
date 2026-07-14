@@ -190,6 +190,7 @@ See [WWWROOT_CLIENT_PLAN.md](./WWWROOT_CLIENT_PLAN.md) for interaction details.
 
 ## Related Documentation
 
+- [Final Backend Technical Documentation](./FINAL_BACKEND_TECHNICAL_DOCUMENTATION.md)
 - [Architecture](./ARCHITECTURE.md)
 - [Database Schema Reference](./DATABASE_SCHEMA.md)
 - [OWASP Audit Plan](./OWASP_AUDIT_PLAN.md)

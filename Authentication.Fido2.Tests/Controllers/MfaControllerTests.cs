@@ -4,8 +4,10 @@ using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.DTOs.Auth;
 using Authentication.Fido2.DTOs.Mfa;
 using Authentication.Fido2.Tests.TestSupport;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Authentication.Fido2.Tests.Controllers;
 
@@ -188,7 +190,7 @@ public class MfaControllerTests
             },
         };
 
-        var result = await controller.VerifyChallenge(new VerifyMfaChallengeRequest { Code = "123456" }, CancellationToken.None);
+        var result = await controller.VerifyChallenge(new VerifyMfaChallengeRequest { ContinuationToken = "token-1", Code = "123456" }, CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result);
         Assert.Equal(1, service.VerifyChallengeCallCount);
@@ -204,9 +206,104 @@ public class MfaControllerTests
             ControllerContext = new ControllerContext { HttpContext = ControllerTestHelpers.CreateHttpContext() },
         };
 
-        var result = await controller.VerifyChallenge(new VerifyMfaChallengeRequest { Code = "123456" }, CancellationToken.None);
+        var result = await controller.VerifyChallenge(new VerifyMfaChallengeRequest { ContinuationToken = "token-1", Code = "123456" }, CancellationToken.None);
 
         Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task VerifyChallenge_ReturnsProblemDetails_WhenConflictOccurs()
+    {
+        var transactionId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var tokenJti = "mfa-jti-2";
+        var service = new RecordingMfaService
+        {
+            VerifyChallengeResultToReturn = Result<LoginResponse>.Failure(
+                "MFA_FLOW_ALREADY_ADVANCED",
+                StatusCodes.Status409Conflict
+            ),
+        };
+
+        var repo = new RecordingMfaTempTokenSessionRepository
+        {
+            ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaTempTokenSession
+            {
+                UserId = 42,
+                MfaTransactionId = transactionId,
+                TokenJti = tokenJti,
+                IssuedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            },
+        };
+
+        var controller = new MfaController(service, repo, new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, transactionId, "mfa", tokenJti)),
+            },
+        };
+
+        var result = await controller.VerifyChallenge(new VerifyMfaChallengeRequest { ContinuationToken = "token-1", Code = "123456" }, CancellationToken.None);
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(objectResult.Value);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.Status);
+        Assert.Equal("MFA_FLOW_ALREADY_ADVANCED", problem.Extensions["code"]);
+    }
+
+    [Fact]
+    public async Task VerifyChallenge_ReturnsRetryAfterHeader_FromPolicy_WhenTooManyRequests()
+    {
+        var transactionId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var tokenJti = "mfa-jti-2";
+        var service = new RecordingMfaService
+        {
+            VerifyChallengeResultToReturn = Result<LoginResponse>.Failure(
+                "RATE_LIMITED",
+                StatusCodes.Status429TooManyRequests
+            ),
+        };
+
+        var repo = new RecordingMfaTempTokenSessionRepository
+        {
+            ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaTempTokenSession
+            {
+                UserId = 42,
+                MfaTransactionId = transactionId,
+                TokenJti = tokenJti,
+                IssuedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            },
+        };
+
+        var controller = new MfaController(
+            service,
+            repo,
+            new RecordingAuditService(),
+            NullLogger<MfaController>.Instance,
+            Microsoft.Extensions.Options.Options.Create(new Authentication.Fido2.Options.MfaApiPolicyOptions
+            {
+                RetryAfterSecondsOnTooManyRequests = 61,
+            })
+        )
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, transactionId, "mfa", tokenJti)),
+            },
+        };
+
+        var result = await controller.VerifyChallenge(
+            new VerifyMfaChallengeRequest { ContinuationToken = "token-1", Code = "123456" },
+            CancellationToken.None
+        );
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, objectResult.StatusCode);
+        Assert.True(controller.Response.Headers.TryGetValue("Retry-After", out var retryAfter));
+        Assert.Equal("61", retryAfter.ToString());
     }
 
     [Fact]
@@ -264,6 +361,191 @@ public class MfaControllerTests
                 RecoveryCodes = ["ABCD-EFGH-IJKL"],
             }),
         };
+    }
+
+    [Fact]
+    public async Task StartManagementSession_ReturnsOk_WhenUserIsValid()
+    {
+        var tx = Guid.NewGuid();
+        var service = new RecordingMfaService
+        {
+            StartManagementSessionResultToReturn = Result<StartMfaManagementSessionResponse>.Success(new StartMfaManagementSessionResponse
+            {
+                Status = "StepUpRequired",
+                MfaTransactionId = tx,
+                AvailableMethods = ["sms"],
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            }),
+        };
+
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+            },
+        };
+
+        var result = await controller.StartManagementSession(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, service.StartManagementSessionCallCount);
+    }
+
+    [Fact]
+    public async Task StartManagementChallenge_ReturnsOk_WhenUserIsValid()
+    {
+        var tx = Guid.NewGuid();
+        var service = new RecordingMfaService
+        {
+            StartChallengeResultToReturn = Result<StartMfaChallengeResponse>.Success(new StartMfaChallengeResponse
+            {
+                MfaTransactionId = tx,
+                Method = "sms",
+                Status = "pending",
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            }),
+        };
+
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+            },
+        };
+
+        var result = await controller.StartManagementChallenge(
+            new StartMfaManagementChallengeRequest { MfaTransactionId = tx, ContinuationToken = "step-token-1", Method = "sms" },
+            CancellationToken.None
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, service.StartChallengeCallCount);
+        Assert.Equal(tx, service.LastMfaTransactionId);
+    }
+
+    [Fact]
+    public async Task StartManagementChallenge_ReturnsProblemDetails_WhenConflictOccurs()
+    {
+        var tx = Guid.NewGuid();
+        var service = new RecordingMfaService
+        {
+            StartChallengeResultToReturn = Result<StartMfaChallengeResponse>.Failure(
+                "MFA_FLOW_ALREADY_ADVANCED",
+                StatusCodes.Status409Conflict
+            ),
+        };
+
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+            },
+        };
+
+        var result = await controller.StartManagementChallenge(
+            new StartMfaManagementChallengeRequest { MfaTransactionId = tx, ContinuationToken = "step-token-1", Method = "sms" },
+            CancellationToken.None
+        );
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
+
+        var problem = Assert.IsType<ProblemDetails>(objectResult.Value);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.Status);
+        Assert.Equal("MFA_FLOW_ALREADY_ADVANCED", problem.Extensions["code"]);
+    }
+
+    [Fact]
+    public async Task VerifyManagementChallenge_ReturnsOk_WhenUserIsValid()
+    {
+        var tx = Guid.NewGuid();
+        var service = new RecordingMfaService
+        {
+            VerifyManagementChallengeResultToReturn = Result<VerifyMfaManagementChallengeResponse>.Success(new VerifyMfaManagementChallengeResponse
+            {
+                Status = "StepUpCompleted",
+                VerifiedAtUtc = DateTime.UtcNow,
+                StepUpValidUntilUtc = DateTime.UtcNow.AddMinutes(10),
+            }),
+        };
+
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+            },
+        };
+
+        var result = await controller.VerifyManagementChallenge(
+            new VerifyMfaManagementChallengeRequest { MfaTransactionId = tx, ContinuationToken = "step-token-2", Code = "123456" },
+            CancellationToken.None
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, service.VerifyManagementChallengeCallCount);
+    }
+
+    [Fact]
+    public async Task CompleteManagementSession_ReturnsOk_WhenUserIsValid()
+    {
+        var tx = Guid.NewGuid();
+        var service = new RecordingMfaService
+        {
+            CompleteManagementSessionResultToReturn = Result<CompleteMfaManagementSessionResponse>.Success(new CompleteMfaManagementSessionResponse
+            {
+                Status = "Completed",
+                CompletedAtUtc = DateTime.UtcNow,
+            }),
+        };
+
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+            },
+        };
+
+        var result = await controller.CompleteManagementSession(
+            new CompleteMfaManagementSessionRequest { MfaTransactionId = tx, ContinuationToken = "step-token-3" },
+            CancellationToken.None
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, service.CompleteManagementSessionCallCount);
+        Assert.Equal(tx, service.LastMfaTransactionId);
+    }
+
+    [Fact]
+    public async Task CancelManagementSession_ReturnsOk_WhenUserIsValid()
+    {
+        var tx = Guid.NewGuid();
+        var service = new RecordingMfaService
+        {
+            CancelManagementSessionResultToReturn = Result<CancelMfaManagementSessionResponse>.Success(new CancelMfaManagementSessionResponse
+            {
+                Status = "Cancelled",
+                CancelledAtUtc = DateTime.UtcNow,
+            }),
+        };
+
+        var controller = new MfaController(service, new RecordingMfaTempTokenSessionRepository(), new RecordingAuditService(), NullLogger<MfaController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+            },
+        };
+
+        var result = await controller.CancelManagementSession(tx, CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, service.CancelManagementSessionCallCount);
+        Assert.Equal(tx, service.LastMfaTransactionId);
     }
 
     [Fact]

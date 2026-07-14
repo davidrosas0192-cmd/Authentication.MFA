@@ -3,9 +3,11 @@ using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.DTOs.Auth;
 using Authentication.Fido2.DTOs.Mfa;
 using Authentication.Fido2.Extensions;
+using Authentication.Fido2.Options;
 using Authentication.Fido2.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
@@ -19,22 +21,26 @@ public class MfaController : ControllerBase
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly IAuditService _auditService;
     private readonly ILogger<MfaController> _logger;
+    private readonly MfaApiPolicyOptions _mfaApiPolicyOptions;
 
     public MfaController(
         IMfaService mfaService,
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
         IAuditService auditService,
-        ILogger<MfaController> logger
+        ILogger<MfaController> logger,
+        IOptions<MfaApiPolicyOptions>? mfaApiPolicyOptions = null
     )
     {
         _mfaService = mfaService;
         _mfaTempTokenSessionRepository = mfaTempTokenSessionRepository;
         _auditService = auditService;
         _logger = logger;
+        _mfaApiPolicyOptions = mfaApiPolicyOptions?.Value ?? new MfaApiPolicyOptions();
     }
 
     [Authorize]
     [HttpGet("methods")]
+    [HttpGet("/api/v1/mfa/methods")]
     public async Task<IActionResult> GetMethods(CancellationToken cancellationToken)
     {
         try
@@ -128,10 +134,13 @@ public class MfaController : ControllerBase
 
     [HttpPost("challenges/start")]
     [HttpPost("/api/mfa/challenges")]
+    [HttpPost("/api/v1/mfa/challenges")]
+    [HttpPost("/api/v1/mfa/challenges/{challengeId}/resend")]
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
     public async Task<IActionResult> StartChallenge(
         [FromBody] StartMfaChallengeRequest request,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        [FromRoute] Guid? challengeId = null
     )
     {
         try
@@ -162,10 +171,12 @@ public class MfaController : ControllerBase
 
     [HttpPost("challenges/verify")]
     [HttpPatch("/api/mfa/challenges/current")]
+    [HttpPost("/api/v1/mfa/challenges/{challengeId}/verify")]
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
     public async Task<IActionResult> VerifyChallenge(
         [FromBody] VerifyMfaChallengeRequest request,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        [FromRoute] Guid? challengeId = null
     )
     {
         try
@@ -179,6 +190,7 @@ public class MfaController : ControllerBase
             var response = await _mfaService.VerifyChallengeAsync(
                 mfaContextResult.UserId,
                 mfaContextResult.MfaTransactionId,
+                request.ContinuationToken,
                 request.Code,
                 cancellationToken
             );
@@ -203,9 +215,12 @@ public class MfaController : ControllerBase
     [Authorize]
     [HttpPost("enrollment/start")]
     [HttpPost("/api/mfa/enrollments")]
+    [HttpPost("/api/v1/mfa/enrollments")]
+    [HttpPost("/api/v1/mfa/enrollments/{enrollmentId}/resend")]
     public async Task<IActionResult> StartEnrollment(
         [FromBody] StartMfaEnrollmentRequest request,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        [FromRoute] Guid? enrollmentId = null
     )
     {
         try
@@ -235,9 +250,11 @@ public class MfaController : ControllerBase
     [Authorize]
     [HttpPost("enrollment/verify")]
     [HttpPatch("/api/mfa/enrollments/current")]
+    [HttpPost("/api/v1/mfa/enrollments/{enrollmentId}/verify")]
     public async Task<IActionResult> VerifyEnrollment(
         [FromBody] VerifyMfaEnrollmentRequest request,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        [FromRoute] Guid? enrollmentId = null
     )
     {
         try
@@ -259,6 +276,156 @@ public class MfaController : ControllerBase
         {
             _logger.LogError(ex, "An error occurred verifying MFA enrollment.");
             return Problem("An error occurred while verifying MFA enrollment.");
+        }
+    }
+
+    [Authorize]
+    [HttpPost("management-sessions")]
+    public async Task<IActionResult> StartManagementSession(CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!TryGetUserId(User, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.StartManagementSessionAsync(
+                userId,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred starting MFA management session.");
+            return Problem("An error occurred while starting MFA management session.");
+        }
+    }
+
+    [Authorize]
+    [HttpPost("management-sessions/challenges/start")]
+    public async Task<IActionResult> StartManagementChallenge(
+        [FromBody] StartMfaManagementChallengeRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            if (!TryGetUserId(User, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.StartManagementChallengeAsync(
+                userId,
+                request.MfaTransactionId,
+                request.ContinuationToken,
+                request.Method,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred starting MFA management challenge.");
+            return Problem("An error occurred while starting MFA management challenge.");
+        }
+    }
+
+    [Authorize]
+    [HttpPost("management-sessions/challenges/verify")]
+    public async Task<IActionResult> VerifyManagementChallenge(
+        [FromBody] VerifyMfaManagementChallengeRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            if (!TryGetUserId(User, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.VerifyManagementChallengeAsync(
+                userId,
+                request.MfaTransactionId,
+                request.ContinuationToken,
+                request.Code,
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred verifying MFA management challenge.");
+            return Problem("An error occurred while verifying MFA management challenge.");
+        }
+    }
+
+    [Authorize]
+    [HttpPost("management-sessions/complete")]
+    public async Task<IActionResult> CompleteManagementSession(
+        [FromBody] CompleteMfaManagementSessionRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            if (!TryGetUserId(User, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.CompleteManagementSessionAsync(
+                userId,
+                request.MfaTransactionId,
+                request.ContinuationToken,
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred completing MFA management session.");
+            return Problem("An error occurred while completing MFA management session.");
+        }
+    }
+
+    [Authorize]
+    [HttpDelete("management-sessions/{mfaTransactionId}")]
+    public async Task<IActionResult> CancelManagementSession(
+        Guid mfaTransactionId,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            if (!TryGetUserId(User, out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token." });
+            }
+
+            var response = await _mfaService.CancelManagementSessionAsync(
+                userId,
+                mfaTransactionId,
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred cancelling MFA management session.");
+            return Problem("An error occurred while cancelling MFA management session.");
         }
     }
 
@@ -352,10 +519,51 @@ public class MfaController : ControllerBase
 
         if (result.StatusCode.HasValue)
         {
+            var statusCode = result.StatusCode.Value;
+            if (
+                statusCode == StatusCodes.Status409Conflict
+                || statusCode == StatusCodes.Status410Gone
+                || statusCode == StatusCodes.Status429TooManyRequests
+                || statusCode == StatusCodes.Status503ServiceUnavailable
+            )
+            {
+                if (statusCode == StatusCodes.Status429TooManyRequests)
+                {
+                    var retryAfterSeconds = Math.Max(1, _mfaApiPolicyOptions.RetryAfterSecondsOnTooManyRequests);
+                    Response.Headers["Retry-After"] = retryAfterSeconds.ToString();
+                }
+
+                var problemDetails = new ProblemDetails
+                {
+                    Status = statusCode,
+                    Title = GetProblemTitle(statusCode),
+                    Detail = result.Error ?? result.Message,
+                };
+
+                if (!string.IsNullOrWhiteSpace(result.Error))
+                {
+                    problemDetails.Extensions["code"] = result.Error;
+                }
+
+                return StatusCode(statusCode, problemDetails);
+            }
+
             return StatusCode(result.StatusCode.Value, payload);
         }
 
         return result.IsSuccess ? Ok(payload) : BadRequest(payload);
+    }
+
+    private static string GetProblemTitle(int statusCode)
+    {
+        return statusCode switch
+        {
+            StatusCodes.Status409Conflict => "Conflict",
+            StatusCodes.Status410Gone => "Gone",
+            StatusCodes.Status429TooManyRequests => "Too Many Requests",
+            StatusCodes.Status503ServiceUnavailable => "Service Unavailable",
+            _ => "Request Failed",
+        };
     }
 
     private async Task<(long UserId, Guid MfaTransactionId, IActionResult? ErrorResult)> ValidateMfaTokenContext(

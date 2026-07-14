@@ -13,6 +13,8 @@ public class MfaChallengeConfiguration : IEntityTypeConfiguration<MfaChallenge>
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Purpose).HasMaxLength(30).IsRequired();
+        builder.Property(x => x.ContinuationToken).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.StepVersion).IsRequired();
         builder.Property(x => x.Method).HasMaxLength(30);
         builder.Property(x => x.Provider).HasMaxLength(30);
         builder.Property(x => x.ProviderRequestId).HasMaxLength(120);
@@ -24,6 +26,7 @@ public class MfaChallengeConfiguration : IEntityTypeConfiguration<MfaChallenge>
 
         builder.HasIndex(x => new { x.UserId, x.Status, x.ExpiresAtUtc });
         builder.HasIndex(x => new { x.UserId, x.Purpose, x.Status, x.ExpiresAtUtc });
+        builder.HasIndex(x => x.ContinuationToken);
         builder.HasIndex(x => x.ProviderRequestId);
     }
 }

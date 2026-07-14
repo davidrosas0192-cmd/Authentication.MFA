@@ -29,4 +29,24 @@ public class MfaChallengeRepository : IMfaChallengeRepository
         _context.MfaChallenges.Update(challenge);
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    public Task<bool> HasRecentVerifiedChallengeAsync(
+        long userId,
+        string purpose,
+        DateTime sinceUtc,
+        CancellationToken cancellationToken
+    )
+    {
+        var now = DateTime.UtcNow;
+
+        return _context.MfaChallenges.AnyAsync(
+            x => x.UserId == userId
+                && x.Purpose == purpose
+                && x.Status == "verified"
+                && x.VerifiedAtUtc != null
+                && x.VerifiedAtUtc >= sinceUtc
+                && x.ExpiresAtUtc > now,
+            cancellationToken
+        );
+    }
 }

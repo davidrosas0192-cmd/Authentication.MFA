@@ -5,6 +5,8 @@ public class MfaChallenge
     public Guid Id { get; set; }
     public long UserId { get; set; }
     public string Purpose { get; set; } = default!;
+    public string ContinuationToken { get; set; } = default!;
+    public int StepVersion { get; set; }
     public string? Method { get; set; }
     public string? Provider { get; set; }
     public string? ProviderRequestId { get; set; }

@@ -15,10 +15,12 @@ public class MfaService : IMfaService
 {
     private const int RecoveryCodeLength = 12;
     private const string RecoveryCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private const int ManagementStepUpWindowMinutes = 10;
 
     private readonly IUserMfaMethodRepository _mfaMethodRepository;
     private readonly IUserRecoveryCodeRepository _userRecoveryCodeRepository;
     private readonly IMfaChallengeRepository _mfaChallengeRepository;
+    private readonly IMfaManagementSessionRepository _mfaManagementSessionRepository;
     private readonly IUserRepository _userRepository;
     private readonly ITwilioOtpService _twilioOtpService;
     private readonly ITokenService _tokenService;
@@ -31,6 +33,7 @@ public class MfaService : IMfaService
         IUserMfaMethodRepository mfaMethodRepository,
         IUserRecoveryCodeRepository userRecoveryCodeRepository,
         IMfaChallengeRepository mfaChallengeRepository,
+        IMfaManagementSessionRepository mfaManagementSessionRepository,
         IUserRepository userRepository,
         ITwilioOtpService twilioOtpService,
         ITokenService tokenService,
@@ -43,6 +46,7 @@ public class MfaService : IMfaService
         _mfaMethodRepository = mfaMethodRepository;
         _userRecoveryCodeRepository = userRecoveryCodeRepository;
         _mfaChallengeRepository = mfaChallengeRepository;
+        _mfaManagementSessionRepository = mfaManagementSessionRepository;
         _userRepository = userRepository;
         _twilioOtpService = twilioOtpService;
         _tokenService = tokenService;
@@ -93,6 +97,209 @@ public class MfaService : IMfaService
             .ToList();
     }
 
+    public async Task<Result<StartMfaManagementSessionResponse>> StartManagementSessionAsync(
+        long userId,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user is null || !user.IsActive)
+        {
+            return Result<StartMfaManagementSessionResponse>.Failure(
+                "User not found or inactive.",
+                StatusCodes.Status404NotFound
+            );
+        }
+
+        var availableMethods = await GetAllowedMethodsAsync(userId, cancellationToken);
+        if (availableMethods.Count == 0)
+        {
+            return Result<StartMfaManagementSessionResponse>.Failure(
+                "No MFA methods are available for step-up.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        var session = new MfaManagementSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Status = MfaManagementSessionStatuses.StepUpRequired,
+            ContinuationToken = CreateContinuationToken(),
+            StepVersion = 1,
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow,
+        };
+
+        await _mfaManagementSessionRepository.AddAsync(session, cancellationToken);
+
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.mfa.management_session.start",
+            "Information",
+            true,
+            userId,
+            user.Username,
+            null,
+            new { managementSessionId = session.Id },
+            cancellationToken
+        );
+
+        return Result<StartMfaManagementSessionResponse>.Success(
+            new StartMfaManagementSessionResponse
+            {
+                Status = "StepUpRequired",
+                MfaTransactionId = session.Id,
+                ContinuationToken = session.ContinuationToken,
+                AvailableMethods = availableMethods,
+                ExpiresAtUtc = session.ExpiresAtUtc,
+            },
+            "Management MFA step-up required."
+        );
+    }
+
+    public async Task<Result<StartMfaChallengeResponse>> StartManagementChallengeAsync(
+        long userId,
+        Guid managementSessionId,
+        string continuationToken,
+        string methodName,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        var session = await _mfaManagementSessionRepository.GetByIdAsync(
+            managementSessionId,
+            cancellationToken
+        );
+
+        if (session is null || session.UserId != userId || session.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            return Result<StartMfaChallengeResponse>.Failure(
+                "Invalid or expired management session.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (session.Status != MfaManagementSessionStatuses.StepUpRequired)
+        {
+            return Result<StartMfaChallengeResponse>.Failure(
+                "Management session is not in a step-up state.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        if (!string.Equals(session.ContinuationToken, continuationToken, StringComparison.Ordinal))
+        {
+            return Result<StartMfaChallengeResponse>.Failure(
+                "Management flow has already advanced.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        var normalizedMethod = methodName.Trim().ToLowerInvariant();
+        if (
+            normalizedMethod != MfaMethodTypes.Sms
+            && normalizedMethod != MfaMethodTypes.Email
+            && normalizedMethod != MfaMethodTypes.RecoveryCode
+        )
+        {
+            return Result<StartMfaChallengeResponse>.Failure(
+                "Only sms, email, and recovery_code challenge start are supported in this endpoint.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        var challenge = new MfaChallenge
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Purpose = MfaChallengePurposes.ManageMfa,
+            Method = normalizedMethod,
+            Status = MfaChallengeStatuses.Pending,
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            CreatedAtUtc = DateTime.UtcNow,
+        };
+
+        if (normalizedMethod == MfaMethodTypes.RecoveryCode)
+        {
+            var hasCodes = await _userRecoveryCodeRepository.HasUnusedCodesAsync(userId, cancellationToken);
+            if (!hasCodes)
+            {
+                return Result<StartMfaChallengeResponse>.Failure(
+                    "Selected MFA method is not available for this user.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            challenge.Provider = "internal";
+            challenge.Channel = normalizedMethod;
+        }
+        else
+        {
+            var method = await _mfaMethodRepository.GetEnabledByUserIdAndMethodAsync(
+                userId,
+                normalizedMethod,
+                cancellationToken
+            );
+
+            if (method is null || string.IsNullOrWhiteSpace(method.ContactValue))
+            {
+                return Result<StartMfaChallengeResponse>.Failure(
+                    "Selected MFA method is not available for this user.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            var providerSid = await _twilioOtpService.StartVerificationAsync(
+                method.ContactValue,
+                normalizedMethod,
+                cancellationToken
+            );
+
+            challenge.Provider = "twilio";
+            challenge.ProviderRequestId = providerSid;
+            challenge.Channel = normalizedMethod;
+            challenge.ContactValue = method.ContactValue;
+        }
+
+        await _mfaChallengeRepository.AddAsync(challenge, cancellationToken);
+
+        var rotatedContinuationToken = CreateContinuationToken();
+        session.ChallengeId = challenge.Id;
+        session.ContinuationToken = rotatedContinuationToken;
+        session.StepVersion += 1;
+        session.UpdatedAtUtc = DateTime.UtcNow;
+        await _mfaManagementSessionRepository.UpdateAsync(session, cancellationToken);
+
+        await _auditService.TrackAuthenticationEventAsync(
+            userId,
+            null,
+            "mfa_management_stepup_start",
+            normalizedMethod,
+            true,
+            null,
+            cancellationToken
+        );
+
+        return Result<StartMfaChallengeResponse>.Success(
+            new StartMfaChallengeResponse
+            {
+                MfaTransactionId = managementSessionId,
+                ContinuationToken = rotatedContinuationToken,
+                Method = normalizedMethod,
+                Status = challenge.Status,
+                ExpiresAtUtc = challenge.ExpiresAtUtc,
+            },
+            "MFA management challenge started."
+        );
+    }
+
     public async Task<Guid> CreateSelectionChallengeAsync(
         long userId,
         string? ipAddress,
@@ -105,6 +312,8 @@ public class MfaService : IMfaService
             Id = Guid.NewGuid(),
             UserId = userId,
             Purpose = MfaChallengePurposes.Login,
+            ContinuationToken = CreateContinuationToken(),
+            StepVersion = 1,
             Status = MfaChallengeStatuses.PendingSelection,
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
             IpAddress = ipAddress,
@@ -131,11 +340,19 @@ public class MfaService : IMfaService
             cancellationToken
         );
 
-        if (challenge is null || challenge.ExpiresAtUtc < DateTime.UtcNow || challenge.UserId != userId)
+        if (challenge is null || challenge.UserId != userId)
         {
             return Result<StartMfaChallengeResponse>.Failure(
-                "Invalid or expired MFA transaction.",
+                "Invalid MFA transaction.",
                 StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (challenge.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            return Result<StartMfaChallengeResponse>.Failure(
+                "MFA transaction has expired.",
+                StatusCodes.Status410Gone
             );
         }
 
@@ -177,6 +394,8 @@ public class MfaService : IMfaService
             challenge.Channel = normalizedMethod;
             challenge.ContactValue = null;
             challenge.Status = MfaChallengeStatuses.Pending;
+            challenge.ContinuationToken = CreateContinuationToken();
+            challenge.StepVersion += 1;
             challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5);
             challenge.IpAddress = ipAddress ?? challenge.IpAddress;
             challenge.UserAgent = userAgent ?? challenge.UserAgent;
@@ -197,6 +416,7 @@ public class MfaService : IMfaService
                 new StartMfaChallengeResponse
                 {
                     MfaTransactionId = challenge.Id,
+                    ContinuationToken = challenge.ContinuationToken,
                     Method = normalizedMethod,
                     Status = challenge.Status,
                     ExpiresAtUtc = challenge.ExpiresAtUtc,
@@ -231,6 +451,8 @@ public class MfaService : IMfaService
         challenge.Channel = normalizedMethod;
         challenge.ContactValue = method.ContactValue;
         challenge.Status = MfaChallengeStatuses.Pending;
+        challenge.ContinuationToken = CreateContinuationToken();
+        challenge.StepVersion += 1;
         challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5);
         challenge.IpAddress = ipAddress ?? challenge.IpAddress;
         challenge.UserAgent = userAgent ?? challenge.UserAgent;
@@ -251,6 +473,7 @@ public class MfaService : IMfaService
             new StartMfaChallengeResponse
             {
                 MfaTransactionId = challenge.Id,
+                ContinuationToken = challenge.ContinuationToken,
                 Method = normalizedMethod,
                 Status = challenge.Status,
                 ExpiresAtUtc = challenge.ExpiresAtUtc,
@@ -259,9 +482,307 @@ public class MfaService : IMfaService
         );
     }
 
+    public async Task<Result<VerifyMfaManagementChallengeResponse>> VerifyManagementChallengeAsync(
+        long userId,
+        Guid managementSessionId,
+        string continuationToken,
+        string code,
+        CancellationToken cancellationToken
+    )
+    {
+        var session = await _mfaManagementSessionRepository.GetByIdAsync(managementSessionId, cancellationToken);
+
+        if (session is null || session.UserId != userId || session.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                "Invalid or expired management session.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (session.Status != MfaManagementSessionStatuses.StepUpRequired)
+        {
+            return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                "Management session is not in a verifiable state.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        if (!string.Equals(session.ContinuationToken, continuationToken, StringComparison.Ordinal))
+        {
+            return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                "Management flow has already advanced.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        if (session.ChallengeId is null)
+        {
+            return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                "No challenge exists for this management session.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        var challenge = await _mfaChallengeRepository.GetByIdAsync(session.ChallengeId.Value, cancellationToken);
+
+        if (challenge is null || challenge.ExpiresAtUtc < DateTime.UtcNow || challenge.UserId != userId)
+        {
+            return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                "Invalid or expired MFA challenge.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (challenge.Purpose != MfaChallengePurposes.ManageMfa)
+        {
+            return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                "Invalid MFA challenge purpose.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (challenge.Status != MfaChallengeStatuses.Pending)
+        {
+            return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                "MFA challenge is not in a verifiable state.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        var normalizedMethod = challenge.Method?.Trim().ToLowerInvariant();
+        if (
+            normalizedMethod != MfaMethodTypes.Sms
+            && normalizedMethod != MfaMethodTypes.Email
+            && normalizedMethod != MfaMethodTypes.RecoveryCode
+        )
+        {
+            return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                "Only sms, email, and recovery_code verification is supported in this endpoint.",
+                StatusCodes.Status400BadRequest
+            );
+        }
+
+        var isApproved = false;
+
+        if (normalizedMethod == MfaMethodTypes.RecoveryCode)
+        {
+            var normalizedCode = NormalizeRecoveryCode(requestedCode: code);
+            isApproved = await _userRecoveryCodeRepository.TryConsumeCodeAsync(
+                challenge.UserId,
+                normalizedCode,
+                cancellationToken
+            );
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(challenge.ContactValue))
+            {
+                return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                    "MFA method is unavailable.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            isApproved = await _twilioOtpService.CheckVerificationAsync(
+                challenge.ContactValue,
+                code,
+                cancellationToken
+            );
+        }
+
+        if (!isApproved)
+        {
+            challenge.Status = MfaChallengeStatuses.Failed;
+            await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.mfa.management_session.stepup.failed",
+                "Warning",
+                false,
+                userId,
+                null,
+                "Invalid step-up code",
+                null,
+                cancellationToken
+            );
+
+            return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                "Invalid or expired code.",
+                StatusCodes.Status401Unauthorized
+            );
+        }
+
+        challenge.Status = MfaChallengeStatuses.Verified;
+        challenge.VerifiedAtUtc = DateTime.UtcNow;
+        await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+        var validUntil = DateTime.UtcNow.AddMinutes(ManagementStepUpWindowMinutes);
+
+        var rotatedContinuationToken = CreateContinuationToken();
+
+        session.Status = MfaManagementSessionStatuses.StepUpCompleted;
+        session.ContinuationToken = rotatedContinuationToken;
+        session.StepVersion += 1;
+        session.VerifiedAtUtc = DateTime.UtcNow;
+        session.ExpiresAtUtc = validUntil;
+        session.UpdatedAtUtc = DateTime.UtcNow;
+        await _mfaManagementSessionRepository.UpdateAsync(session, cancellationToken);
+
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.mfa.management_session.stepup.completed",
+            "Information",
+            true,
+            userId,
+            null,
+            null,
+            new { validUntil },
+            cancellationToken
+        );
+
+        return Result<VerifyMfaManagementChallengeResponse>.Success(
+            new VerifyMfaManagementChallengeResponse
+            {
+                Status = "StepUpCompleted",
+                ContinuationToken = rotatedContinuationToken,
+                VerifiedAtUtc = challenge.VerifiedAtUtc.Value,
+                StepUpValidUntilUtc = validUntil,
+            },
+            "MFA management step-up completed."
+        );
+    }
+
+    public async Task<Result<CompleteMfaManagementSessionResponse>> CompleteManagementSessionAsync(
+        long userId,
+        Guid managementSessionId,
+        string continuationToken,
+        CancellationToken cancellationToken
+    )
+    {
+        var session = await _mfaManagementSessionRepository.GetByIdAsync(managementSessionId, cancellationToken);
+        if (session is null || session.UserId != userId)
+        {
+            return Result<CompleteMfaManagementSessionResponse>.Failure(
+                "Management session not found.",
+                StatusCodes.Status404NotFound
+            );
+        }
+
+        if (session.Status != MfaManagementSessionStatuses.StepUpCompleted)
+        {
+            return Result<CompleteMfaManagementSessionResponse>.Failure(
+                "Management session is not ready to complete.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        if (!string.Equals(session.ContinuationToken, continuationToken, StringComparison.Ordinal))
+        {
+            return Result<CompleteMfaManagementSessionResponse>.Failure(
+                "Management flow has already advanced.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        session.Status = MfaManagementSessionStatuses.Completed;
+        session.ContinuationToken = CreateContinuationToken();
+        session.StepVersion += 1;
+        session.ExpiresAtUtc = DateTime.UtcNow;
+        session.UpdatedAtUtc = DateTime.UtcNow;
+        await _mfaManagementSessionRepository.UpdateAsync(session, cancellationToken);
+
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.mfa.management_session.completed",
+            "Information",
+            true,
+            userId,
+            null,
+            null,
+            new { managementSessionId },
+            cancellationToken
+        );
+
+        return Result<CompleteMfaManagementSessionResponse>.Success(
+            new CompleteMfaManagementSessionResponse
+            {
+                Status = "Completed",
+                CompletedAtUtc = DateTime.UtcNow,
+            },
+            "MFA management session completed."
+        );
+    }
+
+    public async Task<Result<CancelMfaManagementSessionResponse>> CancelManagementSessionAsync(
+        long userId,
+        Guid managementSessionId,
+        CancellationToken cancellationToken
+    )
+    {
+        var session = await _mfaManagementSessionRepository.GetByIdAsync(managementSessionId, cancellationToken);
+        if (session is null || session.UserId != userId)
+        {
+            return Result<CancelMfaManagementSessionResponse>.Failure(
+                "Management session not found.",
+                StatusCodes.Status404NotFound
+            );
+        }
+
+        if (
+            session.Status != MfaManagementSessionStatuses.StepUpRequired
+            && session.Status != MfaManagementSessionStatuses.StepUpCompleted
+        )
+        {
+            return Result<CancelMfaManagementSessionResponse>.Failure(
+                "Management session cannot be cancelled in its current state.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        session.Status = MfaManagementSessionStatuses.Cancelled;
+        session.ExpiresAtUtc = DateTime.UtcNow;
+        session.UpdatedAtUtc = DateTime.UtcNow;
+        await _mfaManagementSessionRepository.UpdateAsync(session, cancellationToken);
+
+        if (session.ChallengeId.HasValue)
+        {
+            var challenge = await _mfaChallengeRepository.GetByIdAsync(session.ChallengeId.Value, cancellationToken);
+            if (challenge is not null && challenge.Status == MfaChallengeStatuses.Pending)
+            {
+                challenge.Status = MfaChallengeStatuses.Revoked;
+                challenge.ExpiresAtUtc = DateTime.UtcNow;
+                await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+            }
+        }
+
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.mfa.management_session.cancelled",
+            "Information",
+            true,
+            userId,
+            null,
+            null,
+            new { managementSessionId },
+            cancellationToken
+        );
+
+        return Result<CancelMfaManagementSessionResponse>.Success(
+            new CancelMfaManagementSessionResponse
+            {
+                Status = "Cancelled",
+                CancelledAtUtc = DateTime.UtcNow,
+            },
+            "MFA management session cancelled."
+        );
+    }
+
     public async Task<Result<LoginResponse>> VerifyChallengeAsync(
         long userId,
         Guid mfaTransactionId,
+        string continuationToken,
         string code,
         CancellationToken cancellationToken
     )
@@ -271,11 +792,19 @@ public class MfaService : IMfaService
             cancellationToken
         );
 
-        if (challenge is null || challenge.ExpiresAtUtc < DateTime.UtcNow || challenge.UserId != userId)
+        if (challenge is null || challenge.UserId != userId)
         {
             return Result<LoginResponse>.Failure(
-                "Invalid or expired MFA challenge.",
+                "Invalid MFA challenge.",
                 StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (challenge.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            return Result<LoginResponse>.Failure(
+                "MFA challenge has expired.",
+                StatusCodes.Status410Gone
             );
         }
 
@@ -290,8 +819,16 @@ public class MfaService : IMfaService
         if (challenge.Status != MfaChallengeStatuses.Pending)
         {
             return Result<LoginResponse>.Failure(
-                "MFA challenge is not in a verifiable state.",
-                StatusCodes.Status400BadRequest
+                "MFA_FLOW_ALREADY_ADVANCED",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        if (!string.Equals(challenge.ContinuationToken, continuationToken, StringComparison.Ordinal))
+        {
+            return Result<LoginResponse>.Failure(
+                "MFA_FLOW_ALREADY_ADVANCED",
+                StatusCodes.Status409Conflict
             );
         }
 
@@ -347,6 +884,8 @@ public class MfaService : IMfaService
             await _userRepository.UpdateAsync(userForRecovery, cancellationToken);
 
             challenge.Status = MfaChallengeStatuses.Verified;
+            challenge.ContinuationToken = CreateContinuationToken();
+            challenge.StepVersion += 1;
             challenge.VerifiedAtUtc = DateTime.UtcNow;
             await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
 
@@ -464,6 +1003,8 @@ public class MfaService : IMfaService
         await _userRepository.UpdateAsync(user, cancellationToken);
 
         challenge.Status = MfaChallengeStatuses.Verified;
+        challenge.ContinuationToken = CreateContinuationToken();
+        challenge.StepVersion += 1;
         challenge.VerifiedAtUtc = DateTime.UtcNow;
 
         await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
@@ -556,6 +1097,8 @@ public class MfaService : IMfaService
             Id = Guid.NewGuid(),
             UserId = userId,
             Purpose = MfaChallengePurposes.Enrollment,
+            ContinuationToken = CreateContinuationToken(),
+            StepVersion = 1,
             Method = normalizedMethod,
             Provider = "twilio",
             ProviderRequestId = providerSid,
@@ -584,6 +1127,7 @@ public class MfaService : IMfaService
             new StartMfaEnrollmentResponse
             {
                 EnrollmentTransactionId = challenge.Id,
+                ContinuationToken = challenge.ContinuationToken,
                 Method = normalizedMethod,
                 Status = challenge.Status,
                 ExpiresAtUtc = challenge.ExpiresAtUtc,
@@ -603,11 +1147,19 @@ public class MfaService : IMfaService
             cancellationToken
         );
 
-        if (challenge is null || challenge.UserId != userId || challenge.ExpiresAtUtc < DateTime.UtcNow)
+        if (challenge is null || challenge.UserId != userId)
         {
             return Result<VerifyMfaEnrollmentResponse>.Failure(
-                "Invalid or expired enrollment challenge.",
+                "Invalid enrollment challenge.",
                 StatusCodes.Status400BadRequest
+            );
+        }
+
+        if (challenge.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            return Result<VerifyMfaEnrollmentResponse>.Failure(
+                "Enrollment challenge has expired.",
+                StatusCodes.Status410Gone
             );
         }
 
@@ -622,8 +1174,16 @@ public class MfaService : IMfaService
         if (challenge.Status != MfaChallengeStatuses.Pending)
         {
             return Result<VerifyMfaEnrollmentResponse>.Failure(
-                "Enrollment challenge is not in a verifiable state.",
-                StatusCodes.Status400BadRequest
+                "MFA_FLOW_ALREADY_ADVANCED",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        if (!string.Equals(challenge.ContinuationToken, request.ContinuationToken, StringComparison.Ordinal))
+        {
+            return Result<VerifyMfaEnrollmentResponse>.Failure(
+                "MFA_FLOW_ALREADY_ADVANCED",
+                StatusCodes.Status409Conflict
             );
         }
 
@@ -696,6 +1256,8 @@ public class MfaService : IMfaService
         }
 
         challenge.Status = MfaChallengeStatuses.Verified;
+        challenge.ContinuationToken = CreateContinuationToken();
+        challenge.StepVersion += 1;
         challenge.VerifiedAtUtc = DateTime.UtcNow;
         await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
 
@@ -730,6 +1292,15 @@ public class MfaService : IMfaService
         CancellationToken cancellationToken
     )
     {
+        var hasRecentManagementStepUp = await HasRecentManagementStepUpAsync(userId, cancellationToken);
+        if (!hasRecentManagementStepUp)
+        {
+            return Result<RemoveMfaMethodResponse>.Failure(
+                "Management step-up is required before modifying MFA methods.",
+                StatusCodes.Status403Forbidden
+            );
+        }
+
         var normalizedMethod = method.Trim().ToLowerInvariant();
         if (normalizedMethod == MfaMethodTypes.RecoveryCode)
         {
@@ -819,6 +1390,16 @@ public class MfaService : IMfaService
         CancellationToken cancellationToken
     )
     {
+        var hasRecentStepUp = await HasRecentManagementStepUpAsync(userId, cancellationToken);
+
+        if (!hasRecentStepUp)
+        {
+            return Result<StartMfaReconfigureResponse>.Failure(
+                "Management step-up is required before reconfiguring MFA methods.",
+                StatusCodes.Status403Forbidden
+            );
+        }
+
         var normalizedMethod = method.Trim().ToLowerInvariant();
         if (normalizedMethod == MfaMethodTypes.Fido2)
         {
@@ -915,6 +1496,16 @@ public class MfaService : IMfaService
         CancellationToken cancellationToken
     )
     {
+        var hasRecentStepUp = await HasRecentManagementStepUpAsync(userId, cancellationToken);
+
+        if (!hasRecentStepUp)
+        {
+            return Result<CompleteMfaReconfigureResponse>.Failure(
+                "Management step-up is required before reconfiguring MFA methods.",
+                StatusCodes.Status403Forbidden
+            );
+        }
+
         var normalizedMethod = method.Trim().ToLowerInvariant();
         if (normalizedMethod != MfaMethodTypes.Sms && normalizedMethod != MfaMethodTypes.Email)
         {
@@ -959,8 +1550,8 @@ public class MfaService : IMfaService
         )
         {
             return Result<CompleteMfaReconfigureResponse>.Failure(
-                "Reconfiguration challenge is not in a verifiable state.",
-                StatusCodes.Status400BadRequest
+                "MFA_FLOW_ALREADY_ADVANCED",
+                StatusCodes.Status409Conflict
             );
         }
 
@@ -1105,5 +1696,19 @@ public class MfaService : IMfaService
     private static string NormalizeRecoveryCode(string requestedCode)
     {
         return requestedCode.Trim().Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
+    }
+
+    private Task<bool> HasRecentManagementStepUpAsync(long userId, CancellationToken cancellationToken)
+    {
+        return _mfaManagementSessionRepository.HasActiveStepUpSessionAsync(
+            userId,
+            DateTime.UtcNow.AddMinutes(-ManagementStepUpWindowMinutes),
+            cancellationToken
+        );
+    }
+
+    private static string CreateContinuationToken()
+    {
+        return Guid.NewGuid().ToString("N");
     }
 }

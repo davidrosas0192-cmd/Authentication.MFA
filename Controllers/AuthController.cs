@@ -54,13 +54,13 @@ public class AuthController : ControllerBase
     {
         if (!TryGetUserId(User, out var userId))
         {
-            return Unauthorized(new { message = "Invalid token." });
+            return UnauthorizedProblem("Invalid token.");
         }
 
         var tokenJti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
         if (string.IsNullOrWhiteSpace(tokenJti))
         {
-            return Unauthorized(new { message = "Invalid token." });
+            return UnauthorizedProblem("Invalid token.");
         }
 
         var response = await _authService.LogoutAsync(userId, tokenJti, cancellationToken);
@@ -75,13 +75,13 @@ public class AuthController : ControllerBase
     {
         if (!TryGetUserId(User, out var userId))
         {
-            return Unauthorized(new { message = "Invalid token." });
+            return UnauthorizedProblem("Invalid token.");
         }
 
         var tokenJti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
         if (string.IsNullOrWhiteSpace(tokenJti))
         {
-            return Unauthorized(new { message = "Invalid MFA token." });
+            return UnauthorizedProblem("Invalid MFA token.");
         }
 
         var response = await _authService.CancelAuthenticationAsync(
@@ -99,10 +99,45 @@ public class AuthController : ControllerBase
 
         if (result.StatusCode.HasValue)
         {
-            return StatusCode(result.StatusCode.Value, payload);
+            var statusCode = result.StatusCode.Value;
+            if (statusCode >= StatusCodes.Status400BadRequest)
+            {
+                var problemDetails = new ProblemDetails
+                {
+                    Status = statusCode,
+                    Title = GetProblemTitle(statusCode),
+                    Detail = result.Error ?? result.Message,
+                };
+
+                if (!string.IsNullOrWhiteSpace(result.Error))
+                {
+                    problemDetails.Extensions["code"] = result.Error;
+                }
+
+                return StatusCode(statusCode, problemDetails);
+            }
+
+            return StatusCode(statusCode, payload);
         }
 
-        return result.IsSuccess ? Ok(payload) : BadRequest(payload);
+        if (result.IsSuccess)
+        {
+            return Ok(payload);
+        }
+
+        var badRequest = new ProblemDetails
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Title = "Bad Request",
+            Detail = result.Error ?? result.Message,
+        };
+
+        if (!string.IsNullOrWhiteSpace(result.Error))
+        {
+            badRequest.Extensions["code"] = result.Error;
+        }
+
+        return BadRequest(badRequest);
     }
 
     private IActionResult ToActionResult(Result result)
@@ -111,10 +146,73 @@ public class AuthController : ControllerBase
 
         if (result.StatusCode.HasValue)
         {
-            return StatusCode(result.StatusCode.Value, payload);
+            var statusCode = result.StatusCode.Value;
+            if (statusCode >= StatusCodes.Status400BadRequest)
+            {
+                var problemDetails = new ProblemDetails
+                {
+                    Status = statusCode,
+                    Title = GetProblemTitle(statusCode),
+                    Detail = result.Error ?? result.Message,
+                };
+
+                if (!string.IsNullOrWhiteSpace(result.Error))
+                {
+                    problemDetails.Extensions["code"] = result.Error;
+                }
+
+                return StatusCode(statusCode, problemDetails);
+            }
+
+            return StatusCode(statusCode, payload);
         }
 
-        return result.IsSuccess ? Ok(payload) : BadRequest(payload);
+        if (result.IsSuccess)
+        {
+            return Ok(payload);
+        }
+
+        var badRequest = new ProblemDetails
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Title = "Bad Request",
+            Detail = result.Error ?? result.Message,
+        };
+
+        if (!string.IsNullOrWhiteSpace(result.Error))
+        {
+            badRequest.Extensions["code"] = result.Error;
+        }
+
+        return BadRequest(badRequest);
+    }
+
+    private static IActionResult UnauthorizedProblem(string detail)
+    {
+        var problem = new ProblemDetails
+        {
+            Status = StatusCodes.Status401Unauthorized,
+            Title = "Unauthorized",
+            Detail = detail,
+        };
+
+        return new UnauthorizedObjectResult(problem);
+    }
+
+    private static string GetProblemTitle(int statusCode)
+    {
+        return statusCode switch
+        {
+            StatusCodes.Status400BadRequest => "Bad Request",
+            StatusCodes.Status401Unauthorized => "Unauthorized",
+            StatusCodes.Status403Forbidden => "Forbidden",
+            StatusCodes.Status404NotFound => "Not Found",
+            StatusCodes.Status409Conflict => "Conflict",
+            StatusCodes.Status410Gone => "Gone",
+            StatusCodes.Status429TooManyRequests => "Too Many Requests",
+            StatusCodes.Status503ServiceUnavailable => "Service Unavailable",
+            _ => "Request Failed",
+        };
     }
 
     private static bool TryGetUserId(ClaimsPrincipal user, out long userId)

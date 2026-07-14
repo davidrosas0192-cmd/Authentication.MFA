@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         // Example: services.AddScoped<IYourService, YourServiceImplementation>();
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.Configure<MfaJwtOptions>(configuration.GetSection("MfaJwt"));
+        services.Configure<MfaApiPolicyOptions>(configuration.GetSection("MfaApiPolicy"));
         services.Configure<Fido2Options>(configuration.GetSection("Fido2"));
         services.Configure<TwilioOptions>(configuration.GetSection("Twilio"));
         services.AddHttpContextAccessor();
@@ -31,6 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAccessTokenSessionRepository, AccessTokenSessionRepository>();
         services.AddScoped<IUserMfaMethodRepository, UserMfaMethodRepository>();
         services.AddScoped<IMfaChallengeRepository, MfaChallengeRepository>();
+        services.AddScoped<IMfaManagementSessionRepository, MfaManagementSessionRepository>();
         services.AddScoped<IUserRecoveryCodeRepository, UserRecoveryCodeRepository>();
         services.AddScoped<ITokenService, TokenService>();
 

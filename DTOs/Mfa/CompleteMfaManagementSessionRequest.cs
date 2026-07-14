@@ -1,7 +1,7 @@
 namespace Authentication.Fido2.DTOs.Mfa;
 
-public class VerifyMfaChallengeRequest
+public class CompleteMfaManagementSessionRequest
 {
+    public Guid MfaTransactionId { get; set; }
     public string ContinuationToken { get; set; } = default!;
-    public string Code { get; set; } = default!;
 }

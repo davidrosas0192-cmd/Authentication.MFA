@@ -10,7 +10,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 2. Run login and handle two results:
    - fully authenticated (`Authenticated`)
    - MFA required (`RequiresMfa`)
-3. When login returns `Authenticated`, call `GET /api/mfa/devices/available` and show setup options from the backend response.
+3. When login returns `Authenticated`, call `GET /api/mfa/setup-options` and show setup options from the backend response.
    - sms
    - email
    - fido2 passwordless
@@ -51,7 +51,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
    - CTA per method: `Use SMS`, `Use Email`, `Use FIDO2`
    - after selection, only the chosen verification flow remains visible
 4. MFA setup screen for authenticated users without configured MFA:
-   - activated when `availableMfaSetupOptions` from `GET /api/mfa/devices/available` has values
+   - activated when `availableMfaSetupOptions` from `GET /api/mfa/setup-options` has values
    - shows three cards: `Setup SMS`, `Setup Email`, `Setup FIDO2 Passwordless`
    - uses full token to start enrollment
    - after selection, only the chosen enrollment flow remains visible
@@ -90,7 +90,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
    - MFA temp token
    - MFA transaction id
    - allowed MFA methods
-   - available MFA setup options (from `/api/mfa/devices/available`)
+   - available MFA setup options (from `/api/mfa/setup-options`)
 2. Resolve token automatically per endpoint:
    - MFA/FIDO2 login challenge -> MFA temp token
    - enrollment -> full access token
@@ -99,9 +99,9 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 ## Expected E2E Flow
 
 1. Create user (`POST /api/users`).
-2. Login (`POST /api/auth/login`).
+2. Login (`POST /api/sessions`).
 3. If `Authenticated`:
-   - call `GET /api/mfa/devices/available`
+   - call `GET /api/mfa/setup-options`
    - if `availableMfaSetupOptions` has values, show the setup options screen
    - show only the selected enrollment flow after a method is chosen
    - show endpoints for the selected enrollment method
@@ -113,17 +113,17 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
    - show only the selected verification flow
    - show endpoints for the selected verification method
    - use MFA temp token for:
-       - `POST /api/mfa/challenges/start`
-       - `POST /api/mfa/challenges/verify`
-       - or `POST /api/fido2/login/options` + `POST /api/fido2/login/complete`
+      - `POST /api/mfa/challenges`
+      - `PATCH /api/mfa/challenges/current`
+      - or `POST /api/fido2/authentications` + `PATCH /api/fido2/authentications/current`
    - challenge start/verify payload does not include `mfaTransactionId`
 6. After successful MFA/FIDO2 login:
    - store full access token
 7. With full token:
-   - `POST /api/mfa/enrollment/start`
-   - `POST /api/mfa/enrollment/verify`
-   - `POST /api/fido2/enrollment/options`
-   - `POST /api/fido2/enrollment/complete`
+   - `POST /api/mfa/enrollments`
+   - `PATCH /api/mfa/enrollments/current`
+   - `POST /api/fido2/enrollments`
+   - `PATCH /api/fido2/enrollments/current`
 
 ## FIDO2 Integration Notes
 
@@ -135,7 +135,7 @@ Build a friendly web client inside `wwwroot` to test authentication, MFA, and FI
 
 1. User can be created from the interface.
 2. Login supports both scenarios (`Authenticated` and `RequiresMfa`).
-3. If login returns `Authenticated`, the UI loads setup options from `GET /api/mfa/devices/available` and shows only available options.
+3. If login returns `Authenticated`, the UI loads setup options from `GET /api/mfa/setup-options` and shows only available options.
 4. If login requires MFA, the UI shows methods/devices from `AllowedMfaMethods`.
 5. MFA temp token can be used to complete MFA or FIDO2 login.
 6. After full authentication, enrollment flows are enabled.

@@ -120,7 +120,7 @@ Security/authentication auditing is implemented through explicit audit records w
 
 ## Standard Login
 
-1. Client calls /api/auth/login with username/password.
+1. Client calls /api/sessions with username/password.
 2. If no MFA methods are enabled, full access token is returned.
 3. If MFA is required, response includes:
    - AllowedMfaMethods
@@ -131,15 +131,15 @@ Security/authentication auditing is implemented through explicit audit records w
 
 ## SMS/Email Enrollment
 
-1. Authenticated user starts enrollment (/api/mfa/enrollment/start).
+1. Authenticated user starts enrollment (`POST /api/mfa/enrollments`).
 2. Service creates enrollment challenge and sends OTP via Twilio Verify.
-3. User verifies OTP (/api/mfa/enrollment/verify).
+3. User verifies OTP (`PATCH /api/mfa/enrollments/current`).
 4. UserMfaMethod is inserted/updated as enabled and verified.
 
 ## SMS/Email MFA Login Challenge
 
-1. Client starts challenge with MFA token (/api/mfa/challenges/start).
-2. Client verifies OTP with MFA token (/api/mfa/challenges/verify).
+1. Client starts challenge with MFA token (`POST /api/mfa/challenges`).
+2. Client verifies OTP with MFA token (`PATCH /api/mfa/challenges/current`).
 3. MFA transaction context is resolved from token claims (`mfa_tx`) and active token session, not from request body.
 4. Service returns full access token on success.
 

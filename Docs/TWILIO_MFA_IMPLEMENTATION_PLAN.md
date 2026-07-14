@@ -89,25 +89,25 @@ Security notes:
 1. `GET /api/mfa/methods`
 - Returns all available/enabled methods for current user.
 
-2. `POST /api/mfa/challenges/start`
+2. `POST /api/mfa/challenges`
 - Input: method (sms/email/fido2).
 - Transaction context is resolved from MFA token claims (`mfa_tx`) and active session.
 - Output: challenge metadata and expiration.
 
-3. `POST /api/mfa/challenges/verify`
+3. `PATCH /api/mfa/challenges/current`
 - Input: OTP code (for sms/email) or fido2 payload.
 - Transaction context is resolved from MFA token claims (`mfa_tx`) and active session.
 - Output: authenticated tokens if successful.
 
-4. `GET /api/mfa/devices/available`
+4. `GET /api/mfa/setup-options`
 - Input: full access token.
 - Output: configured methods + remaining setup options.
 
-5. `POST /api/mfa/enrollment/start`
+5. `POST /api/mfa/enrollments`
 - Input: method (sms or email) + contact value.
 - Output: enrollment transaction metadata and expiration.
 
-6. `POST /api/mfa/enrollment/verify`
+6. `PATCH /api/mfa/enrollments/current`
 - Input: enrollmentTransactionId + OTP code.
 - Output: method verified and enabled for user.
 
@@ -121,7 +121,7 @@ Security notes:
   - Client chooses method and starts challenge
 
 After full authentication:
-- Client calls GET /api/mfa/devices/available to populate setup options.
+- Client calls GET /api/mfa/setup-options to populate setup options.
 
 This is the primary place where allowed methods are returned.
 
@@ -224,17 +224,17 @@ Test cases:
 - Implemented login response contract:
   - AllowedMfaMethods + MfaToken when MFA required
 - Implemented Twilio OTP challenge endpoints for login:
-  - /api/mfa/challenges/start
-  - /api/mfa/challenges/verify
+  - /api/mfa/challenges
+  - /api/mfa/challenges/current
 - Implemented token-driven challenge payload contract:
   - challenge endpoints no longer require request-body mfaTransactionId
   - transaction context is derived from mfa_tx + token session
 - Implemented setup options endpoint:
-  - /api/mfa/devices/available
+  - /api/mfa/setup-options
 - Implemented MFA-token enforcement for login challenge endpoints:
   - Requires MfaBearer scheme
   - Validates token_type = mfa and mfa_tx claim binding
 - Implemented enrollment endpoints for sms/email:
-  - /api/mfa/enrollment/start
-  - /api/mfa/enrollment/verify
+  - /api/mfa/enrollments
+  - /api/mfa/enrollments/current
 - Existing FIDO2 enrollment/login flows remain active in `Fido2Controller`.

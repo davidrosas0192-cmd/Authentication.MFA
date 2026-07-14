@@ -7,20 +7,20 @@ This guide describes the MFA enrollment options currently available in the REST 
 1. FIDO2 enrollment (passkey)
 - Controller: Fido2Controller
 - Endpoints:
-  - POST /api/fido2/enrollment/options
-  - POST /api/fido2/enrollment/complete
+  - POST /api/fido2/enrollments
+  - PATCH /api/fido2/enrollments/current
 
 2. SMS/Email OTP enrollment (Twilio Verify)
 - Controller: MfaController
 - Endpoints:
-  - POST /api/mfa/enrollment/start
-  - POST /api/mfa/enrollment/verify
+  - POST /api/mfa/enrollments
+  - PATCH /api/mfa/enrollments/current
 
 ## FIDO2 Enrollment (Already Implemented)
 
 1. User authenticates with a full access token.
-2. Client requests options from `POST /api/fido2/enrollment/options`.
-3. Client completes attestation and sends payload to `POST /api/fido2/enrollment/complete`.
+2. Client requests options from `POST /api/fido2/enrollments`.
+3. Client completes attestation and sends payload to `PATCH /api/fido2/enrollments/current`.
 4. FIDO2 credential is stored and the user FIDO2 capability remains available.
 
 The completion step is bound to the authenticated user that created the transaction, so the enrollment cannot be finalized from a different account context.
@@ -29,7 +29,7 @@ The completion step is bound to the authenticated user that created the transact
 
 ### Start Enrollment
 
-POST /api/mfa/enrollment/start
+POST /api/mfa/enrollments
 
 Request body example:
 
@@ -57,13 +57,14 @@ Response includes:
 
 ### Verify Enrollment
 
-POST /api/mfa/enrollment/verify
+PATCH /api/mfa/enrollments/current
 
 Request body example:
 
 ```json
 {
   "enrollmentTransactionId": "00000000-0000-0000-0000-000000000000",
+  "continuationToken": "token-from-start-response",
   "code": "123456"
 }
 ```
@@ -82,21 +83,21 @@ After password validation:
   - AllowedMfaMethods
   - MfaToken
 - Client chooses method:
-  - sms/email: use /api/mfa/challenges/start and /api/mfa/challenges/verify with MfaToken (transaction context comes from token claims)
+  - sms/email: use `POST /api/mfa/challenges` and `PATCH /api/mfa/challenges/current` with MfaToken (transaction context comes from token claims)
   - fido2: continue with FIDO2 login endpoints
 
 After full authentication:
-- Call GET /api/mfa/devices/available to populate remaining setup options.
+- Call `GET /api/mfa/setup-options` to populate remaining setup options.
 
 ## Token Requirements
 
 - Enrollment endpoints require a full access token:
-  - `POST /api/mfa/enrollment/start`
-  - `POST /api/mfa/enrollment/verify`
+  - `POST /api/mfa/enrollments`
+  - `PATCH /api/mfa/enrollments/current`
 
 - Login challenge endpoints require an MFA token:
-  - `POST /api/mfa/challenges/start`
-  - `POST /api/mfa/challenges/verify`
+  - `POST /api/mfa/challenges`
+  - `PATCH /api/mfa/challenges/current`
 
 - For challenge start/verify, request body no longer sends `mfaTransactionId`.
 - Server resolves transaction context from `mfa_tx` claim + active MFA token session.
@@ -120,6 +121,6 @@ Twilio settings in appsettings or secret store:
 
 ## Current Behavior
 
-- SMS and email enrollment are exposed as REST endpoints under `/api/mfa/enrollment/*`.
+- SMS and email enrollment are exposed as REST endpoints under `/api/mfa/enrollments*`.
 - The login response remains the source of truth for allowed MFA methods.
 - Enrollment state is persisted in `UserMfaMethods`.

@@ -31,28 +31,28 @@ This checklist is intended for manual security review and penetration testing of
 
 ### Login and token lifecycle
 
-- [ ] `POST /api/auth/login` returns access and refresh tokens on success.
-- [ ] `POST /api/auth/login` returns MFA token and allowed methods when MFA is required.
-- [ ] `POST /api/auth/login` uses generic failure messages for invalid credentials.
-- [ ] `POST /api/auth/logout` revokes the current access-token session.
-- [ ] `POST /api/auth/cancel-authentication` revokes the current MFA token session.
+- [ ] `POST /api/sessions` returns access and refresh tokens on success.
+- [ ] `POST /api/sessions` returns MFA token and allowed methods when MFA is required.
+- [ ] `POST /api/sessions` uses generic failure messages for invalid credentials.
+- [ ] `DELETE /api/sessions/current` revokes the current access-token session.
+- [ ] `DELETE /api/mfa/sessions/current` revokes the current MFA token session.
 - [ ] Successful login invalidates prior active sessions for the user.
 - [ ] Login failure attempts are auditable and searchable by correlation id, IP, and username/email.
 
 ### MFA methods and setup
 
 - [ ] `GET /api/mfa/methods` returns only methods enabled for the authenticated user.
-- [ ] `GET /api/mfa/devices/available` returns allowed methods plus remaining setup options.
-- [ ] `GET /api/mfa/methods` and `GET /api/mfa/devices/available` emit audit events.
-- [ ] `POST /api/mfa/enrollment/start` requires a full access token.
-- [ ] `POST /api/mfa/enrollment/verify` requires a full access token.
+- [ ] `GET /api/mfa/setup-options` returns allowed methods plus remaining setup options.
+- [ ] `GET /api/mfa/methods` and `GET /api/mfa/setup-options` emit audit events.
+- [ ] `POST /api/mfa/enrollments` requires a full access token.
+- [ ] `PATCH /api/mfa/enrollments/current` requires a full access token.
 - [ ] Enrollment responses do not expose secrets or provider tokens.
 - [ ] Enrollment start and verify actions are auditable.
 
 ### MFA challenges
 
-- [ ] `POST /api/mfa/challenges/start` requires the MFA temp token scheme.
-- [ ] `POST /api/mfa/challenges/verify` requires the MFA temp token scheme.
+- [ ] `POST /api/mfa/challenges` requires the MFA temp token scheme.
+- [ ] `PATCH /api/mfa/challenges/current` requires the MFA temp token scheme.
 - [ ] Challenge context is resolved server-side from MFA token claims and session state.
 - [ ] Request-body transaction identifiers are not required for OTP challenge start/verify.
 - [ ] Replayed or expired MFA tokens are rejected.
@@ -60,11 +60,11 @@ This checklist is intended for manual security review and penetration testing of
 
 ### FIDO2 enrollment and login
 
-- [ ] `POST /api/fido2/enrollment/options` requires a full access token.
-- [ ] `POST /api/fido2/enrollment/complete` requires a full access token.
-- [ ] `POST /api/fido2/enrollment/complete` is bound to the authenticated user that created the transaction.
-- [ ] `POST /api/fido2/login/options` requires the MFA temp token scheme.
-- [ ] `POST /api/fido2/login/complete` requires the MFA temp token scheme.
+- [ ] `POST /api/fido2/enrollments` requires a full access token.
+- [ ] `PATCH /api/fido2/enrollments/current` requires a full access token.
+- [ ] `PATCH /api/fido2/enrollments/current` is bound to the authenticated user that created the transaction.
+- [ ] `POST /api/fido2/authentications` requires the MFA temp token scheme.
+- [ ] `PATCH /api/fido2/authentications/current` requires the MFA temp token scheme.
 - [ ] WebAuthn attestation and assertion payloads are not logged in full.
 - [ ] FIDO2 transaction replay is rejected.
 - [ ] FIDO2 origin validation matches the configured application origin exactly.

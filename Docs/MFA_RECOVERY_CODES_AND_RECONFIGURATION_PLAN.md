@@ -102,7 +102,7 @@ This is optional; can be deferred if IsEnabled + UpdatedAtUtc are sufficient.
 - Must invalidate old active codes atomically.
 
 ### Login Challenge Integration (MFA Token)
-4. POST /api/mfa/challenges/start with method = recovery_code
+4. POST /api/mfa/challenges with method = recovery_code
 - No external provider call.
 - Creates/updates challenge state for code verification.
 

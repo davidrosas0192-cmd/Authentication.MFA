@@ -217,6 +217,7 @@ Request:
 ```json
 {
   "enrollmentTransactionId": "22222222-2222-2222-2222-222222222222",
+  "continuationToken": "token-from-start-response",
   "code": "123456"
 }
 ```
@@ -274,6 +275,7 @@ Request:
 
 ```json
 {
+  "continuationToken": "token-from-start-response",
   "code": "123456"
 }
 ```

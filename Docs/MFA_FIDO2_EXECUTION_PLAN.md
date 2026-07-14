@@ -26,16 +26,16 @@ Implemented a secure authentication flow where:
 flowchart TD
     A[POST /api/users] --> B[User created with hashed password]
 
-    C[POST /api/auth/login] --> D{MFA required?}
+    C[POST /api/sessions] --> D{MFA required?}
     D -- No --> E[Issue full access token]
     D -- Yes --> F[Create mfa challenge tx]
     F --> G[Issue MFA temp token with mfa_tx and jti]
     G --> H[Persist MfaTempTokenSession]
 
-    H --> I[POST /api/mfa/challenges/start]
-    H --> J[POST /api/mfa/challenges/verify]
-    H --> K[POST /api/fido2/login/options]
-    H --> L[POST /api/fido2/login/complete]
+    H --> I[POST /api/mfa/challenges]
+    H --> J[PATCH /api/mfa/challenges/current]
+    H --> K[POST /api/fido2/authentications]
+    H --> L[PATCH /api/fido2/authentications/current]
 
     I --> M[Validate mfa token claims + active session]
     J --> M
@@ -49,7 +49,7 @@ flowchart TD
     L --> P
 
     P --> Q[Issue full access token]
-    Q --> T[GET /api/mfa/devices/available]
+    Q --> T[GET /api/mfa/setup-options]
 
     E --> R[Authorized enrollment endpoints]
     Q --> R

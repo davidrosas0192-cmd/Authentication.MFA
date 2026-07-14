@@ -120,7 +120,7 @@ Changes:
 1. `RequiresMfa` login returns MFA token and allowed methods.
 2. Start/verify challenge succeeds without body transaction id.
 3. FIDO2 login options/complete succeeds with token-bound context.
-4. Full auth session can still call `/api/mfa/devices/available`.
+4. Full auth session can still call `/api/mfa/setup-options`.
 
 ### Negative Security Tests
 1. Replay old MFA token -> 401.

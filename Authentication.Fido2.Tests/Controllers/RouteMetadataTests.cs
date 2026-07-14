@@ -8,25 +8,31 @@ namespace Authentication.Fido2.Tests.Controllers;
 public class RouteMetadataTests
 {
     [Fact]
-    public void Controllers_ExposePreferredRestRouteAliases()
+    public void Controllers_ExposeSingleRestRoutes()
     {
-        AssertContainsTemplates(typeof(AuthController), "Login", "/api/sessions", "login");
-        AssertContainsTemplates(typeof(AuthController), "Logout", "/api/sessions/current", "logout");
-        AssertContainsTemplates(typeof(AuthController), "CancelAuthentication", "/api/mfa/sessions/current", "cancel-authentication");
+        AssertContainsTemplates(typeof(AuthController), "Login", "/api/sessions");
+        AssertContainsTemplates(typeof(AuthController), "Logout", "/api/sessions/current");
+        AssertContainsTemplates(typeof(AuthController), "CancelAuthentication", "/api/mfa/sessions/current");
 
-        AssertContainsTemplates(typeof(MfaController), "GetDevicesAvailable", "/api/mfa/setup-options", "devices/available");
-        AssertContainsTemplates(typeof(MfaController), "StartChallenge", "/api/mfa/challenges", "challenges/start");
-        AssertContainsTemplates(typeof(MfaController), "VerifyChallenge", "/api/mfa/challenges/current", "challenges/verify");
-        AssertContainsTemplates(typeof(MfaController), "StartEnrollment", "/api/mfa/enrollments", "enrollment/start");
-        AssertContainsTemplates(typeof(MfaController), "VerifyEnrollment", "/api/mfa/enrollments/current", "enrollment/verify");
+        AssertContainsTemplates(typeof(MfaController), "GetMethods", "methods");
+        AssertContainsTemplates(typeof(MfaController), "GetDevicesAvailable", "setup-options");
+        AssertContainsTemplates(typeof(MfaController), "StartChallenge", "challenges");
+        AssertContainsTemplates(typeof(MfaController), "VerifyChallenge", "challenges/current");
+        AssertContainsTemplates(typeof(MfaController), "StartEnrollment", "enrollments");
+        AssertContainsTemplates(typeof(MfaController), "VerifyEnrollment", "enrollments/current");
+        AssertContainsTemplates(typeof(MfaController), "StartManagementSession", "management-sessions");
+        AssertContainsTemplates(typeof(MfaController), "StartManagementChallenge", "management-sessions/challenges/start");
+        AssertContainsTemplates(typeof(MfaController), "VerifyManagementChallenge", "management-sessions/challenges/verify");
+        AssertContainsTemplates(typeof(MfaController), "CompleteManagementSession", "management-sessions/complete");
+        AssertContainsTemplates(typeof(MfaController), "CancelManagementSession", "management-sessions/{mfaTransactionId}");
         AssertContainsTemplates(typeof(MfaController), "RemoveMethod", "methods/{method}");
         AssertContainsTemplates(typeof(MfaController), "StartReconfigureMethod", "methods/{method}/reconfigure");
         AssertContainsTemplates(typeof(MfaController), "CompleteReconfigureMethod", "methods/{method}/reconfigure/current");
 
-        AssertContainsTemplates(typeof(Fido2Controller), "CreateEnrollmentOptions", "/api/fido2/enrollments", "enrollment/options");
-        AssertContainsTemplates(typeof(Fido2Controller), "CompleteEnrollment", "/api/fido2/enrollments/current", "enrollment/complete");
-        AssertContainsTemplates(typeof(Fido2Controller), "CreateLoginOptions", "/api/fido2/authentications", "login/options");
-        AssertContainsTemplates(typeof(Fido2Controller), "CompleteLogin", "/api/fido2/authentications/current", "login/complete");
+        AssertContainsTemplates(typeof(Fido2Controller), "CreateEnrollmentOptions", "enrollments");
+        AssertContainsTemplates(typeof(Fido2Controller), "CompleteEnrollment", "enrollments/current");
+        AssertContainsTemplates(typeof(Fido2Controller), "CreateLoginOptions", "authentications");
+        AssertContainsTemplates(typeof(Fido2Controller), "CompleteLogin", "authentications/current");
     }
 
     private static void AssertContainsTemplates(Type controllerType, string methodName, params string[] expectedTemplates)

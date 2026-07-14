@@ -35,52 +35,39 @@ All controller responses follow this shape:
 ## Endpoint Index
 
 1. `POST /api/users`
-2. `POST /api/auth/login`
-3. `POST /api/auth/logout` (`Authorize: access token`)
-4. `POST /api/auth/cancel-authentication` (`Authorize: mfa token`)
+2. `POST /api/sessions`
+3. `DELETE /api/sessions/current` (`Authorize: access token`)
+4. `DELETE /api/mfa/sessions/current` (`Authorize: mfa token`)
 5. `GET /api/mfa/methods` (`Authorize: access token`)
-6. `GET /api/mfa/devices/available` (`Authorize: access token`)
-7. `POST /api/mfa/enrollment/start` (`Authorize: access token`)
-8. `POST /api/mfa/enrollment/verify` (`Authorize: access token`)
-9. `POST /api/mfa/challenges/start` (`Authorize: mfa token`)
-10. `POST /api/mfa/challenges/verify` (`Authorize: mfa token`)
-11. `POST /api/fido2/enrollment/options` (`Authorize: access token`)
-12. `POST /api/fido2/enrollment/complete` (`Authorize: access token`)
-13. `POST /api/fido2/login/options` (`Authorize: mfa token`)
-14. `POST /api/fido2/login/complete` (`Authorize: mfa token`)
-15. `DELETE /api/mfa/methods/{method}` (`Authorize: access token`)
-16. `POST /api/mfa/methods/{method}/reconfigure` (`Authorize: access token`)
-17. `PATCH /api/mfa/methods/{method}/reconfigure/current` (`Authorize: access token`)
+6. `GET /api/mfa/setup-options` (`Authorize: access token`)
+7. `POST /api/mfa/challenges` (`Authorize: mfa token`)
+8. `PATCH /api/mfa/challenges/current` (`Authorize: mfa token`)
+9. `POST /api/mfa/enrollments` (`Authorize: access token`)
+10. `PATCH /api/mfa/enrollments/current` (`Authorize: access token`)
+11. `POST /api/fido2/enrollments` (`Authorize: access token`)
+12. `PATCH /api/fido2/enrollments/current` (`Authorize: access token`)
+13. `POST /api/fido2/authentications` (`Authorize: mfa token`)
+14. `PATCH /api/fido2/authentications/current` (`Authorize: mfa token`)
+15. `POST /api/mfa/management-sessions` (`Authorize: access token`)
+16. `POST /api/mfa/management-sessions/challenges/start` (`Authorize: access token`)
+17. `POST /api/mfa/management-sessions/challenges/verify` (`Authorize: access token`)
+18. `POST /api/mfa/management-sessions/complete` (`Authorize: access token`)
+19. `DELETE /api/mfa/management-sessions/{mfaTransactionId}` (`Authorize: access token`)
+20. `DELETE /api/mfa/methods/{method}` (`Authorize: access token`)
+21. `POST /api/mfa/methods/{method}/reconfigure` (`Authorize: access token`)
+22. `PATCH /api/mfa/methods/{method}/reconfigure/current` (`Authorize: access token`)
 
 ## REST Alignment
 
-The API follows REST principles where practical for authentication workflows.
-
-- Preferred resource-style aliases:
-  - `POST /api/sessions` for login
-  - `DELETE /api/sessions/current` for logout
-  - `DELETE /api/mfa/sessions/current` for canceling an MFA temp session
-  - `POST /api/mfa/challenges` for starting an MFA challenge
-  - `PATCH /api/mfa/challenges/current` for verifying an MFA challenge
-  - `POST /api/mfa/enrollments` for starting MFA enrollment
-  - `PATCH /api/mfa/enrollments/current` for verifying MFA enrollment
-  - `POST /api/fido2/enrollments` for starting FIDO2 enrollment
-  - `PATCH /api/fido2/enrollments/current` for completing FIDO2 enrollment
-  - `POST /api/fido2/authentications` for starting FIDO2 login
-  - `PATCH /api/fido2/authentications/current` for completing FIDO2 login
-  - `DELETE /api/mfa/methods/{method}` for removing an MFA factor
-  - `POST /api/mfa/methods/{method}/reconfigure` for starting contact reconfiguration
-  - `PATCH /api/mfa/methods/{method}/reconfigure/current` for completing reconfiguration
-- Legacy action-style routes remain supported for compatibility.
-- The login and challenge flows remain ceremony-style endpoints because they model state transitions, not CRUD over a single persisted entity.
+The API uses a single RESTful route per endpoint. Legacy action-style aliases were removed.
 
 ## Token Session Behavior
 
 - Full access tokens include a `jti` and are validated against server-side sessions.
 - MFA temp tokens include a `jti` and are validated against `MfaTempTokenSessions`.
 - A new successful login invalidates previous active token sessions for that user.
-- `POST /api/auth/logout` revokes the current full token session.
-- `POST /api/auth/cancel-authentication` revokes the current MFA temp token session.
+- `DELETE /api/sessions/current` revokes the current full token session.
+- `DELETE /api/mfa/sessions/current` revokes the current MFA temp token session.
 
 ## 1) Password Login Entry Point
 
@@ -114,7 +101,7 @@ Audit expectations:
 - Log request source, outcome, and correlation id.
 - Never log plaintext passwords.
 
-### `POST /api/auth/login`
+### `POST /api/sessions`
 
 Request:
 
@@ -170,7 +157,7 @@ Response data:
 
 ## 3) Get Available Devices For Setup
 
-### `GET /api/mfa/devices/available`
+### `GET /api/mfa/setup-options`
 
 Headers:
 - `Authorization: Bearer <access_token>`
@@ -188,7 +175,7 @@ Response data:
 
 Use this flow to register SMS or email MFA for a logged-in user.
 
-### `POST /api/mfa/enrollment/start`
+### `POST /api/mfa/enrollments`
 
 Headers:
 - `Authorization: Bearer <access_token>`
@@ -220,7 +207,7 @@ Response data:
 }
 ```
 
-### `POST /api/mfa/enrollment/verify`
+### `PATCH /api/mfa/enrollments/current`
 
 Headers:
 - `Authorization: Bearer <access_token>`
@@ -248,9 +235,9 @@ Response data:
 
 ## 5) Complete Login With SMS/Email MFA
 
-After `POST /api/auth/login` returns allowed methods.
+After `POST /api/sessions` returns allowed methods.
 
-### `POST /api/mfa/challenges/start`
+### `POST /api/mfa/challenges`
 
 Headers:
 - `Authorization: Bearer <mfa_token>`
@@ -278,7 +265,7 @@ Response data:
 }
 ```
 
-### `POST /api/mfa/challenges/verify`
+### `PATCH /api/mfa/challenges/current`
 
 Headers:
 - `Authorization: Bearer <mfa_token>`
@@ -313,7 +300,7 @@ Success response returns tokens:
 
 ## 6) FIDO2 Enrollment Flow
 
-### `POST /api/fido2/enrollment/options`
+### `POST /api/fido2/enrollments`
 
 Headers:
 - `Authorization: Bearer <access_token>`
@@ -325,7 +312,7 @@ Returns:
 - `data.transactionId`
 - `data.options` (WebAuthn credential creation options)
 
-### `POST /api/fido2/enrollment/complete`
+### `PATCH /api/fido2/enrollments/current`
 
 Headers:
 - `Authorization: Bearer <access_token>`
@@ -350,7 +337,7 @@ Note:
 
 ## 7) FIDO2 Login Flow
 
-### `POST /api/fido2/login/options`
+### `POST /api/fido2/authentications`
 
 Headers:
 - `Authorization: Bearer <mfa_token>`
@@ -367,7 +354,7 @@ Returns:
 - `data.transactionId`
 - `data.options` (WebAuthn assertion options)
 
-### `POST /api/fido2/login/complete`
+### `PATCH /api/fido2/authentications/current`
 
 Headers:
 - `Authorization: Bearer <mfa_token>`
@@ -392,29 +379,29 @@ Note:
 ## End-to-End Quick Paths
 
 1. Password-only user:
-- `POST /api/auth/login` -> tokens
+- `POST /api/sessions` -> tokens
 
 2. Password + SMS/email MFA user:
-- `POST /api/auth/login` -> `RequiresMfa` + `allowedMfaMethods` + `mfaToken`
-- `POST /api/mfa/challenges/start`
-- `POST /api/mfa/challenges/verify` -> tokens
+- `POST /api/sessions` -> `RequiresMfa` + `allowedMfaMethods` + `mfaToken`
+- `POST /api/mfa/challenges`
+- `PATCH /api/mfa/challenges/current` -> tokens
 
 3. Password + FIDO2 MFA user:
-- `POST /api/auth/login` -> `RequiresMfa` + includes `fido2`
-- `POST /api/fido2/login/options`
-- `POST /api/fido2/login/complete` -> tokens
+- `POST /api/sessions` -> `RequiresMfa` + includes `fido2`
+- `POST /api/fido2/authentications`
+- `PATCH /api/fido2/authentications/current` -> tokens
 
 Note:
 - FIDO2 login endpoints enforce `MfaToken` and validate `mfa_tx` and token session context.
 - SMS/email MFA challenge endpoints also enforce `MfaToken`.
 
 4. User enrolls a new SMS/email method:
-- `POST /api/mfa/enrollment/start` (`Authorize`)
-- `POST /api/mfa/enrollment/verify` (`Authorize`)
+- `POST /api/mfa/enrollments` (`Authorize`)
+- `PATCH /api/mfa/enrollments/current` (`Authorize`)
 
 5. User enrolls a FIDO2 method:
-- `POST /api/fido2/enrollment/options` (`Authorize`)
-- `POST /api/fido2/enrollment/complete` (`Authorize`)
+- `POST /api/fido2/enrollments` (`Authorize`)
+- `PATCH /api/fido2/enrollments/current` (`Authorize`)
 
 ## Common Error Cases
 

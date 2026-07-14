@@ -22,7 +22,6 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
-    [HttpPost("login")]
     [HttpPost("/api/sessions")]
     public async Task<IActionResult> Login(
         [FromBody] LoginRequest request,
@@ -48,7 +47,6 @@ public class AuthController : ControllerBase
     }
 
     [Authorize]
-    [HttpPost("logout")]
     [HttpDelete("/api/sessions/current")]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
@@ -69,7 +67,6 @@ public class AuthController : ControllerBase
     }
 
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
-    [HttpPost("cancel-authentication")]
     [HttpDelete("/api/mfa/sessions/current")]
     public async Task<IActionResult> CancelAuthentication(CancellationToken cancellationToken)
     {

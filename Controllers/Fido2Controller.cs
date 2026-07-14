@@ -35,8 +35,7 @@ public class Fido2Controller : ControllerBase
     }
 
     [Authorize]
-    [HttpPost("enrollment/options")]
-    [HttpPost("/api/fido2/enrollments")]
+    [HttpPost("enrollments")]
     public async Task<IActionResult> CreateEnrollmentOptions(CancellationToken cancellationToken)
     {
         try
@@ -75,8 +74,7 @@ public class Fido2Controller : ControllerBase
     }
 
     [Authorize]
-    [HttpPost("enrollment/complete")]
-    [HttpPatch("/api/fido2/enrollments/current")]
+    [HttpPatch("enrollments/current")]
     public async Task<IActionResult> CompleteEnrollment(
         CompleteFido2EnrollmentRequest request,
         CancellationToken cancellationToken
@@ -118,8 +116,7 @@ public class Fido2Controller : ControllerBase
     }
 
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
-    [HttpPost("login/options")]
-    [HttpPost("/api/fido2/authentications")]
+    [HttpPost("authentications")]
     public async Task<IActionResult> CreateLoginOptions(
         CreateFido2LoginOptionsRequest request,
         CancellationToken cancellationToken
@@ -152,8 +149,7 @@ public class Fido2Controller : ControllerBase
     }
 
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
-    [HttpPost("login/complete")]
-    [HttpPatch("/api/fido2/authentications/current")]
+    [HttpPatch("authentications/current")]
     public async Task<IActionResult> CompleteLogin(
         CompleteFido2LoginRequest request,
         CancellationToken cancellationToken

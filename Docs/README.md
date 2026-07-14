@@ -115,42 +115,41 @@ If those files were previously tracked, they must be removed from index once wit
 
 The API is REST-friendly, but not pure CRUD REST everywhere because authentication involves ceremony-style flows.
 
-- Resource-oriented endpoints now have preferred aliases such as `POST /api/sessions`, `DELETE /api/sessions/current`, `POST /api/mfa/challenges`, `PATCH /api/mfa/challenges/current`, `POST /api/mfa/enrollments`, and `POST /api/fido2/authentications`.
-- The legacy action-style routes remain supported for backward compatibility.
+- Resource-oriented endpoints are exposed as a single canonical route (legacy action-style aliases removed).
 - Stateless token validation is preserved on protected endpoints.
 - Login and MFA still return workflow-specific data because they represent security ceremonies, not simple entity CRUD.
 
 ### Login
 
-1. Send a login request to `POST /api/auth/login`.
+1. Send a login request to `POST /api/sessions`.
 2. If MFA is required, the login response returns `AllowedMfaMethods` and `MfaToken`.
-3. For SMS/email verification, use `MfaToken` with `POST /api/mfa/challenges/start` and `POST /api/mfa/challenges/verify`.
+3. For SMS/email verification, use `MfaToken` with `POST /api/mfa/challenges` and `PATCH /api/mfa/challenges/current`.
 4. When an enrollment completes, any `recoveryCodes` in the response must be shown once and downloadable immediately.
 4. Transaction context is resolved server-side from the MFA token claims.
 5. A full access token is issued only after successful MFA verification.
 6. If MFA is not required, a full access token is issued directly by login.
-7. After full authentication, call `GET /api/mfa/devices/available` to retrieve remaining setup options.
+7. After full authentication, call `GET /api/mfa/setup-options` to retrieve remaining setup options.
 
 ### SMS/Email Enrollment (Twilio Verify)
 
 1. Authenticate with a full access token.
-2. Start enrollment with `POST /api/mfa/enrollment/start` and method/contact value.
+2. Start enrollment with `POST /api/mfa/enrollments` and method/contact value.
 3. Receive OTP via the selected channel (sms or email).
-4. Verify enrollment with `POST /api/mfa/enrollment/verify`.
+4. Verify enrollment with `PATCH /api/mfa/enrollments/current`.
 5. The method becomes enabled and verified for the user.
 
 ### FIDO2 Enrollment
 
 1. Authenticate with a full access token.
-2. Request enrollment options with `POST /api/fido2/enrollment/options`.
-3. Complete attestation with the authenticator through `POST /api/fido2/enrollment/complete`.
+2. Request enrollment options with `POST /api/fido2/enrollments`.
+3. Complete attestation with the authenticator through `PATCH /api/fido2/enrollments/current`.
 4. The credential is stored and FIDO2 MFA is enabled for the user.
 5. Completion is bound to the authenticated user that created the transaction.
 
 ### FIDO2 Login
 
-1. Request login options using `POST /api/fido2/login/options`.
-2. Complete assertion with the authenticator through `POST /api/fido2/login/complete`.
+1. Request login options using `POST /api/fido2/authentications`.
+2. Complete assertion with the authenticator through `PATCH /api/fido2/authentications/current`.
 3. Receive JWT tokens after successful verification.
 
 ## Web Test Client
@@ -160,7 +159,7 @@ The project serves a browser-based REST client from the app root using static fi
 - Open the API base URL in the browser (for example `https://localhost:7190/`).
 - The client guides flows by token state:
 	- RequiresMfa: shows only registered verification methods.
-	- Authenticated: loads setup options from /api/mfa/devices/available and shows only enrollment options not configured yet.
+	- Authenticated: loads setup options from /api/mfa/setup-options and shows only enrollment options not configured yet.
 - Selecting a method shows the exact endpoints to call for that method.
 
 See [WWWROOT_CLIENT_PLAN.md](./WWWROOT_CLIENT_PLAN.md) for interaction details.
@@ -174,10 +173,10 @@ See [WWWROOT_CLIENT_PLAN.md](./WWWROOT_CLIENT_PLAN.md) for interaction details.
 - MFA token:
 	- Issued only when login returns `RequiresMfa`.
 	- Used for MFA login challenge endpoints:
-		- `POST /api/mfa/challenges/start`
-		- `POST /api/mfa/challenges/verify`
-		- `POST /api/fido2/login/options`
-		- `POST /api/fido2/login/complete`
+		- `POST /api/mfa/challenges`
+		- `PATCH /api/mfa/challenges/current`
+		- `POST /api/fido2/authentications`
+		- `PATCH /api/fido2/authentications/current`
 	- For SMS/email challenge endpoints, the request body no longer sends `mfaTransactionId`; it is resolved server-side from the `mfa_tx` claim.
 	- Full access token is rejected on these endpoints.
 

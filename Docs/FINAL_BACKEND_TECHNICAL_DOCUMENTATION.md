@@ -169,23 +169,17 @@ Current persistence model is defined by EF entities and migrations.
 ### Discovery / Setup
 
 - `GET /api/mfa/methods`
-- `GET /api/mfa/devices/available`
+- `GET /api/mfa/setup-options`
 
 ### Login Challenge (MFA token required)
 
-- `POST /api/mfa/challenges/start`
-- `POST /api/mfa/challenges/verify`
-- REST aliases:
-  - `POST /api/mfa/challenges`
-  - `PATCH /api/mfa/challenges/current`
+- `POST /api/mfa/challenges`
+- `PATCH /api/mfa/challenges/current`
 
 ### Enrollment (full access token required)
 
-- `POST /api/mfa/enrollment/start`
-- `POST /api/mfa/enrollment/verify`
-- REST aliases:
-  - `POST /api/mfa/enrollments`
-  - `PATCH /api/mfa/enrollments/current`
+- `POST /api/mfa/enrollments`
+- `PATCH /api/mfa/enrollments/current`
 
 ### Management Step-Up Session (full access token required)
 
@@ -213,10 +207,10 @@ sequenceDiagram
     participant MfaS as MfaService
     participant DB as SQL
 
-    Client->>Auth: POST /api/auth/login (credentials)
+    Client->>Auth: POST /api/sessions (credentials)
     Auth-->>Client: RequiresMfa + mfaToken
 
-    Client->>MfaC: POST /api/mfa/challenges/start (method) + mfaToken
+    Client->>MfaC: POST /api/mfa/challenges (method) + mfaToken
     MfaC->>MfaC: Validate token_type=mfa, mfa_tx, jti
     MfaC->>DB: Validate active MfaTempTokenSession by jti/mfa_tx/user
     MfaC->>MfaS: StartChallenge(userId, mfa_tx, method)
@@ -224,7 +218,7 @@ sequenceDiagram
     MfaS-->>MfaC: challenge started + continuation token
     MfaC-->>Client: pending challenge
 
-    Client->>MfaC: POST /api/mfa/challenges/verify (code, continuationToken) + mfaToken
+    Client->>MfaC: PATCH /api/mfa/challenges/current (code, continuationToken) + mfaToken
     MfaC->>MfaS: VerifyChallenge(userId, mfa_tx, continuationToken, code)
     MfaS->>DB: Verify pending state + token + expiry
     MfaS->>DB: Mark verified and rotate continuation
@@ -250,14 +244,14 @@ sequenceDiagram
     participant Twilio
     participant DB as SQL
 
-    Client->>MfaC: POST /api/mfa/enrollment/start (method, contact) + access token
+    Client->>MfaC: POST /api/mfa/enrollments (method, contact) + access token
     MfaC->>MfaS: StartEnrollment(userId, request)
     MfaS->>Twilio: StartVerification(contact, channel)
     MfaS->>DB: Create enrollment MfaChallenge (purpose=enrollment, continuationToken)
     MfaS-->>MfaC: enrollmentTransactionId + continuationToken
     MfaC-->>Client: pending enrollment
 
-    Client->>MfaC: POST /api/mfa/enrollment/verify (txId, continuationToken, code)
+    Client->>MfaC: PATCH /api/mfa/enrollments/current (txId, continuationToken, code)
     MfaC->>MfaS: VerifyEnrollment(userId, request)
     MfaS->>DB: Validate pending + continuation + expiry
     MfaS->>Twilio: CheckVerification(contact, code)

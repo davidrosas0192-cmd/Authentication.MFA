@@ -40,7 +40,6 @@ public class MfaController : ControllerBase
 
     [Authorize]
     [HttpGet("methods")]
-    [HttpGet("/api/v1/mfa/methods")]
     public async Task<IActionResult> GetMethods(CancellationToken cancellationToken)
     {
         try
@@ -87,8 +86,7 @@ public class MfaController : ControllerBase
     }
 
     [Authorize]
-    [HttpGet("devices/available")]
-    [HttpGet("/api/mfa/setup-options")]
+    [HttpGet("setup-options")]
     public async Task<IActionResult> GetDevicesAvailable(CancellationToken cancellationToken)
     {
         try
@@ -132,15 +130,11 @@ public class MfaController : ControllerBase
         }
     }
 
-    [HttpPost("challenges/start")]
-    [HttpPost("/api/mfa/challenges")]
-    [HttpPost("/api/v1/mfa/challenges")]
-    [HttpPost("/api/v1/mfa/challenges/{challengeId}/resend")]
+    [HttpPost("challenges")]
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
     public async Task<IActionResult> StartChallenge(
         [FromBody] StartMfaChallengeRequest request,
-        CancellationToken cancellationToken,
-        [FromRoute] Guid? challengeId = null
+        CancellationToken cancellationToken
     )
     {
         try
@@ -169,14 +163,11 @@ public class MfaController : ControllerBase
         }
     }
 
-    [HttpPost("challenges/verify")]
-    [HttpPatch("/api/mfa/challenges/current")]
-    [HttpPost("/api/v1/mfa/challenges/{challengeId}/verify")]
+    [HttpPatch("challenges/current")]
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
     public async Task<IActionResult> VerifyChallenge(
         [FromBody] VerifyMfaChallengeRequest request,
-        CancellationToken cancellationToken,
-        [FromRoute] Guid? challengeId = null
+        CancellationToken cancellationToken
     )
     {
         try
@@ -213,14 +204,10 @@ public class MfaController : ControllerBase
     }
 
     [Authorize]
-    [HttpPost("enrollment/start")]
-    [HttpPost("/api/mfa/enrollments")]
-    [HttpPost("/api/v1/mfa/enrollments")]
-    [HttpPost("/api/v1/mfa/enrollments/{enrollmentId}/resend")]
+    [HttpPost("enrollments")]
     public async Task<IActionResult> StartEnrollment(
         [FromBody] StartMfaEnrollmentRequest request,
-        CancellationToken cancellationToken,
-        [FromRoute] Guid? enrollmentId = null
+        CancellationToken cancellationToken
     )
     {
         try
@@ -248,13 +235,10 @@ public class MfaController : ControllerBase
     }
 
     [Authorize]
-    [HttpPost("enrollment/verify")]
-    [HttpPatch("/api/mfa/enrollments/current")]
-    [HttpPost("/api/v1/mfa/enrollments/{enrollmentId}/verify")]
+    [HttpPatch("enrollments/current")]
     public async Task<IActionResult> VerifyEnrollment(
         [FromBody] VerifyMfaEnrollmentRequest request,
-        CancellationToken cancellationToken,
-        [FromRoute] Guid? enrollmentId = null
+        CancellationToken cancellationToken
     )
     {
         try

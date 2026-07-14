@@ -115,7 +115,7 @@ public class Fido2Controller : ControllerBase
         }
     }
 
-    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
     [HttpPost("authentications")]
     public async Task<IActionResult> CreateLoginOptions(
         CreateFido2LoginOptionsRequest request,
@@ -148,7 +148,7 @@ public class Fido2Controller : ControllerBase
         }
     }
 
-    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
     [HttpPatch("authentications/current")]
     public async Task<IActionResult> CompleteLogin(
         CompleteFido2LoginRequest request,

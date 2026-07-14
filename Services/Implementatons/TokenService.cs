@@ -14,11 +14,17 @@ public class TokenService : ITokenService
 {
     private readonly JwtOptions _jwtOptions;
     private readonly MfaJwtOptions _mfaJwtOptions;
+    private readonly LoginEnrollmentJwtOptions _loginEnrollmentJwtOptions;
 
-    public TokenService(IOptions<JwtOptions> jwtOptions, IOptions<MfaJwtOptions> mfaJwtOptions)
+    public TokenService(
+        IOptions<JwtOptions> jwtOptions,
+        IOptions<MfaJwtOptions> mfaJwtOptions,
+        IOptions<LoginEnrollmentJwtOptions> loginEnrollmentJwtOptions
+    )
     {
         _jwtOptions = jwtOptions.Value;
         _mfaJwtOptions = mfaJwtOptions.Value;
+        _loginEnrollmentJwtOptions = loginEnrollmentJwtOptions.Value;
     }
 
     public string CreateAccessToken(User user, string tokenJti)
@@ -92,14 +98,14 @@ public class TokenService : ITokenService
             new("enrollment_sid", enrollmentSessionId.ToString()),
         };
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_mfaJwtOptions.SecretKey));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_loginEnrollmentJwtOptions.SecretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
-            issuer: _mfaJwtOptions.Issuer,
-            audience: _mfaJwtOptions.Audience,
+            issuer: _loginEnrollmentJwtOptions.Issuer,
+            audience: _loginEnrollmentJwtOptions.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_mfaJwtOptions.ExpirationMinutes),
+            expires: DateTime.UtcNow.AddMinutes(_loginEnrollmentJwtOptions.ExpirationMinutes),
             signingCredentials: credentials
         );
 

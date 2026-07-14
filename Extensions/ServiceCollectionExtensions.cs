@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         // Example: services.AddScoped<IYourService, YourServiceImplementation>();
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.Configure<MfaJwtOptions>(configuration.GetSection("MfaJwt"));
+        services.Configure<LoginEnrollmentJwtOptions>(configuration.GetSection("LoginEnrollmentJwt"));
         services.Configure<MfaApiPolicyOptions>(configuration.GetSection("MfaApiPolicy"));
         services.Configure<Fido2Options>(configuration.GetSection("Fido2"));
         services.Configure<TwilioOptions>(configuration.GetSection("Twilio"));

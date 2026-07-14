@@ -66,7 +66,7 @@ public class AuthController : ControllerBase
         return ToActionResult(response);
     }
 
-    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
     [HttpDelete("/api/mfa/sessions/current")]
     public async Task<IActionResult> CancelAuthentication(CancellationToken cancellationToken)
     {

@@ -154,11 +154,8 @@ public class MfaController : ControllerBase
     }
 
     [HttpPost("challenges")]
-    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
-    public async Task<IActionResult> StartChallenge(
-        [FromBody] StartMfaChallengeRequest request,
-        CancellationToken cancellationToken
-    )
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
+    public async Task<IActionResult> StartChallenge(        [FromBody] StartMfaChallengeRequest request,        CancellationToken cancellationToken    )
     {
         try
         {
@@ -187,11 +184,8 @@ public class MfaController : ControllerBase
     }
 
     [HttpPatch("challenges/current")]
-    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
-    public async Task<IActionResult> VerifyChallenge(
-        [FromBody] VerifyMfaChallengeRequest request,
-        CancellationToken cancellationToken
-    )
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
+    public async Task<IActionResult> VerifyChallenge(        [FromBody] VerifyMfaChallengeRequest request,        CancellationToken cancellationToken    )
     {
         try
         {
@@ -257,12 +251,9 @@ public class MfaController : ControllerBase
         }
     }
 
-    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.LoginEnrollmentScheme)]
     [HttpPost("login-enrollments")]
-    public async Task<IActionResult> StartLoginEnrollment(
-        [FromBody] StartLoginEnrollmentRequest request,
-        CancellationToken cancellationToken
-    )
+    public async Task<IActionResult> StartLoginEnrollment(        [FromBody] StartLoginEnrollmentRequest request,        CancellationToken cancellationToken    )
     {
         try
         {
@@ -290,7 +281,7 @@ public class MfaController : ControllerBase
         }
     }
 
-    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.LoginEnrollmentScheme)]
     [HttpPatch("login-enrollments/current")]
     public async Task<IActionResult> VerifyLoginEnrollment(
         [FromBody] VerifyLoginEnrollmentRequest request,
@@ -321,12 +312,9 @@ public class MfaController : ControllerBase
         }
     }
 
-    [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaScheme)]
+    [Authorize(AuthenticationSchemes = AuthenticationExtensions.LoginEnrollmentScheme)]
     [HttpPost("login-enrollment-sessions/complete")]
-    public async Task<IActionResult> CompleteLoginEnrollmentSession(
-        [FromBody] CompleteLoginEnrollmentSessionRequest request,
-        CancellationToken cancellationToken
-    )
+    public async Task<IActionResult> CompleteLoginEnrollmentSession(        [FromBody] CompleteLoginEnrollmentSessionRequest request,        CancellationToken cancellationToken    )
     {
         try
         {
@@ -412,10 +400,7 @@ public class MfaController : ControllerBase
 
     [Authorize]
     [HttpPost("management-sessions/challenges/start")]
-    public async Task<IActionResult> StartManagementChallenge(
-        [FromBody] StartMfaManagementChallengeRequest request,
-        CancellationToken cancellationToken
-    )
+    public async Task<IActionResult> StartManagementChallenge(        [FromBody] StartMfaManagementChallengeRequest request,        CancellationToken cancellationToken    )
     {
         try
         {
@@ -675,38 +660,10 @@ public class MfaController : ControllerBase
     )
     {
         var hasUserId = TryGetUserId(User, out var userId);
-        var tokenType = User.FindFirst("token_type")?.Value;
         var tokenTransactionId = User.FindFirst("mfa_tx")?.Value;
-        var tokenJti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
 
-        if (
-            !hasUserId
-            || !string.Equals(tokenType, "mfa", StringComparison.OrdinalIgnoreCase)
-            || !Guid.TryParse(tokenTransactionId, out var mfaTransactionId)
-            || string.IsNullOrWhiteSpace(tokenJti)
-        )
-        {
-            await _auditService.TrackSecurityEventAsync(
-                "Authentication",
-                "auth.mfa.token_validation",
-                "Warning",
-                false,
-                null,
-                null,
-                "Invalid MFA token",
-                null,
-                cancellationToken
-            );
-
-            return (0, Guid.Empty, Unauthorized(new { message = "Invalid MFA token." }));
-        }
-
-        var tokenSession = await _mfaTempTokenSessionRepository.GetActiveByJtiAsync(
-            tokenJti,
-            cancellationToken
-        );
-
-        if (tokenSession is null || tokenSession.UserId != userId || tokenSession.MfaTransactionId != mfaTransactionId)
+        // token_type and JTI already validated at authentication scheme level (MfaChallengeScheme)
+        if (!hasUserId || !Guid.TryParse(tokenTransactionId, out var mfaTransactionId))
         {
             await _auditService.TrackSecurityEventAsync(
                 "Authentication",
@@ -715,12 +672,12 @@ public class MfaController : ControllerBase
                 false,
                 userId,
                 null,
-                "MFA token expired or not valid",
-                new { tokenJti, mfaTransactionId },
+                "Invalid MFA transaction ID",
+                null,
                 cancellationToken
             );
 
-            return (0, Guid.Empty, Unauthorized(new { message = "MFA token is expired or not valid." }));
+            return (0, Guid.Empty, Unauthorized(new { message = "Invalid MFA context." }));
         }
 
         return (userId, mfaTransactionId, null);
@@ -731,38 +688,10 @@ public class MfaController : ControllerBase
     )
     {
         var hasUserId = TryGetUserId(User, out var userId);
-        var tokenType = User.FindFirst("token_type")?.Value;
         var enrollmentSessionIdValue = User.FindFirst("enrollment_sid")?.Value;
-        var tokenJti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
 
-        if (
-            !hasUserId
-            || !string.Equals(tokenType, "login_enrollment", StringComparison.OrdinalIgnoreCase)
-            || !Guid.TryParse(enrollmentSessionIdValue, out var enrollmentSessionId)
-            || string.IsNullOrWhiteSpace(tokenJti)
-        )
-        {
-            await _auditService.TrackSecurityEventAsync(
-                "Authentication",
-                "auth.mfa.login_enrollment.token_validation",
-                "Warning",
-                false,
-                null,
-                null,
-                "Invalid login enrollment token",
-                null,
-                cancellationToken
-            );
-
-            return (0, Guid.Empty, Unauthorized(new { message = "Invalid login enrollment token." }));
-        }
-
-        var session = await _mfaLoginEnrollmentSessionRepository.GetActiveByJtiAsync(
-            tokenJti,
-            cancellationToken
-        );
-
-        if (session is null || session.UserId != userId || session.Id != enrollmentSessionId)
+        // token_type and JTI already validated at authentication scheme level (LoginEnrollmentScheme)
+        if (!hasUserId || !Guid.TryParse(enrollmentSessionIdValue, out var enrollmentSessionId))
         {
             await _auditService.TrackSecurityEventAsync(
                 "Authentication",
@@ -771,12 +700,12 @@ public class MfaController : ControllerBase
                 false,
                 userId,
                 null,
-                "Login enrollment token expired or not valid",
-                new { tokenJti, enrollmentSessionId },
+                "Invalid enrollment session ID",
+                null,
                 cancellationToken
             );
 
-            return (0, Guid.Empty, Unauthorized(new { message = "Login enrollment token is expired or not valid." }));
+            return (0, Guid.Empty, Unauthorized(new { message = "Invalid enrollment context." }));
         }
 
         return (userId, enrollmentSessionId, null);

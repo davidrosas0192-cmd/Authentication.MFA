@@ -1,4 +1,4 @@
-# REST API Endpoint Flow Guide
+2# REST API Endpoint Flow Guide
 
 This guide documents the REST endpoints for auth, MFA, and FIDO2.
 

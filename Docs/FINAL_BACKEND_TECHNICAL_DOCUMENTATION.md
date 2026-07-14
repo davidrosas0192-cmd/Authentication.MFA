@@ -183,6 +183,35 @@ Current persistence model is defined by EF entities and migrations.
   - `MfaManagementSessions.ContinuationToken`
 - Generated with cryptographically secure random bytes (256-bit, URL-safe)
 
+### JWT Bearer Authentication Schemes (Defense-in-Depth Token Type Validation)
+
+The system uses **three separate JWT Bearer authentication schemes** to prevent token type confusion attacks and ensure each token can only be used for its intended purpose:
+
+#### 1. FullAccessScheme (Default Bearer)
+- **Scheme name:** `Bearer` (ASP.NET Core default)
+- **Token type claim:** `token_type=access`
+- **Used for:** All authenticated operations after successful login/MFA
+- **Session backing:** `AccessTokenSessions` (validates `jti` and revocation)
+- **Automatic validation:** Issuer, Audience, Lifetime, Signing Key, Token Type, JTI
+
+#### 2. MfaChallengeScheme
+- **Scheme name:** `MfaChallenge`
+- **Token type claim:** `token_type=mfa` (automatically validated in scheme)
+- **Used for:** MFA login challenge endpoints only
+- **Session backing:** `MfaTempTokenSessions` (validates `jti`, transaction, and user)
+- **Automatic validation:** Issuer, Audience, Lifetime, Signing Key, **Token Type**, **JTI in session**
+- **Endpoints:** POST/PATCH `/api/mfa/challenges`, POST/PATCH `/api/mfa/authentications` (FIDO2), DELETE `/api/mfa/sessions/current`
+
+#### 3. LoginEnrollmentScheme
+- **Scheme name:** `LoginEnrollment`
+- **Token type claim:** `token_type=login_enrollment` (automatically validated in scheme)
+- **Used for:** Login-time MFA enrollment endpoints only
+- **Session backing:** `MfaLoginEnrollmentSessions` (validates `jti`, session, and user)
+- **Automatic validation:** Issuer, Audience, Lifetime, Signing Key, **Token Type**, **JTI in session**
+- **Endpoints:** POST/PATCH `/api/mfa/login-enrollments`, POST `/api/mfa/login-enrollment-sessions/complete`
+
+**Security benefit:** Token type validation happens at the **authentication middleware level** (OnTokenValidated), not at the endpoint level, providing automatic protection against token interchange attacks. Controllers do not need to perform manual token_type validation because it is guaranteed by the scheme.
+
 ## 7. MfaController API Surface (Backend)
 
 ### Discovery / Setup

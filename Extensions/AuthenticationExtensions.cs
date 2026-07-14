@@ -15,12 +15,19 @@ namespace Authentication.Fido2.Extensions;
 public static class AuthenticationExtensions
 {
     public const string FullAccessScheme = JwtBearerDefaults.AuthenticationScheme;
+    public const string MfaChallengeScheme = "MfaChallenge";
+    public const string LoginEnrollmentScheme = "LoginEnrollment";
+    
+    [Obsolete("Use MfaChallengeScheme instead")]
     public const string MfaScheme = "MfaBearer";
 
-    public static  IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         var jwtOptions = configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
         var mfaJwtOptions = configuration.GetSection("MfaJwt").Get<MfaJwtOptions>() ?? new MfaJwtOptions();
+        var loginEnrollmentJwtOptions =
+            configuration.GetSection("LoginEnrollmentJwt").Get<LoginEnrollmentJwtOptions>()
+            ?? new LoginEnrollmentJwtOptions();
         var fido2Options = configuration.GetSection("Fido2").Get<Fido2Options>() ?? new Fido2Options();
 
         services.AddAuthentication(options =>
@@ -67,7 +74,8 @@ public static class AuthenticationExtensions
                     },
                 };
             })
-            .AddJwtBearer(MfaScheme, options =>
+            // MFA Challenge scheme: for MFA login challenge endpoints
+            .AddJwtBearer(MfaChallengeScheme, options =>
             {
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
@@ -81,6 +89,85 @@ public static class AuthenticationExtensions
                         Encoding.UTF8.GetBytes(mfaJwtOptions.SecretKey)
                     ),
                     ClockSkew = TimeSpan.FromMinutes(1)
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        // Validate token_type claim
+                        var tokenType = context.Principal?.FindFirst("token_type")?.Value;
+                        if (!string.Equals(tokenType, "mfa", StringComparison.OrdinalIgnoreCase))
+                        {
+                            context.Fail("Token must be an MFA challenge token (token_type=mfa).");
+                            return;
+                        }
+
+                        // Validate JTI in session
+                        var tokenJti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+                        if (string.IsNullOrWhiteSpace(tokenJti))
+                        {
+                            context.Fail("MFA token missing JTI claim.");
+                            return;
+                        }
+
+                        var repository = context.HttpContext.RequestServices
+                            .GetRequiredService<IMfaTempTokenSessionRepository>();
+                        var tokenSession = await repository.GetActiveByJtiAsync(tokenJti, context.HttpContext.RequestAborted);
+
+                        if (tokenSession is null)
+                        {
+                            context.Fail("MFA token session not found or expired.");
+                        }
+                    }
+                };
+            })
+            // Login Enrollment scheme: for login-time MFA enrollment endpoints
+            .AddJwtBearer(LoginEnrollmentScheme, options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = loginEnrollmentJwtOptions.Issuer,
+                    ValidAudience = loginEnrollmentJwtOptions.Audience,
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(loginEnrollmentJwtOptions.SecretKey)
+                    ),
+                    ClockSkew = TimeSpan.FromMinutes(1)
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        // Validate token_type claim
+                        var tokenType = context.Principal?.FindFirst("token_type")?.Value;
+                        if (!string.Equals(tokenType, "login_enrollment", StringComparison.OrdinalIgnoreCase))
+                        {
+                            context.Fail("Token must be a login enrollment token (token_type=login_enrollment).");
+                            return;
+                        }
+
+                        // Validate JTI in session
+                        var tokenJti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+                        if (string.IsNullOrWhiteSpace(tokenJti))
+                        {
+                            context.Fail("Login enrollment token missing JTI claim.");
+                            return;
+                        }
+
+                        var repository = context.HttpContext.RequestServices
+                            .GetRequiredService<IMfaLoginEnrollmentSessionRepository>();
+                        var tokenSession = await repository.GetActiveByJtiAsync(tokenJti, context.HttpContext.RequestAborted);
+
+                        if (tokenSession is null)
+                        {
+                            context.Fail("Login enrollment token session not found or expired.");
+                        }
+                    }
                 };
             });
 

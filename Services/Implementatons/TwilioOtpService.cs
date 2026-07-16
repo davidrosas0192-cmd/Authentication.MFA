@@ -21,7 +21,7 @@ public class TwilioOtpService : ITwilioOtpService
         CancellationToken cancellationToken
     )
     {
-        TwilioClient.Init(_options.AccountSid, _options.AuthToken);
+        TwilioClient.Init(_options.ApiKeySid, _options.ApiKeySecret);
 
         var verification = await VerificationResource.CreateAsync(
             pathServiceSid: _options.VerifyServiceSid,
@@ -30,8 +30,6 @@ public class TwilioOtpService : ITwilioOtpService
         );
 
         return verification.Sid;
-        // return Guid.NewGuid().ToString(); // Return a new GUID as a placeholder for the verification SID
-
     }
 
     public async Task<bool> CheckVerificationAsync(
@@ -40,7 +38,7 @@ public class TwilioOtpService : ITwilioOtpService
         CancellationToken cancellationToken
     )
     {
-        TwilioClient.Init(_options.AccountSid, _options.AuthToken);
+        TwilioClient.Init(_options.ApiKeySid, _options.ApiKeySecret);
 
         var check = await VerificationCheckResource.CreateAsync(
             pathServiceSid: _options.VerifyServiceSid,
@@ -49,7 +47,5 @@ public class TwilioOtpService : ITwilioOtpService
         );
 
         return string.Equals(check.Status, "approved", StringComparison.OrdinalIgnoreCase);
-
-        // return true; // Always return true for testing purposes
     }
 }

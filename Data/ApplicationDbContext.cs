@@ -19,6 +19,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<MfaChallenge> MfaChallenges => Set<MfaChallenge>();
     public DbSet<MfaSession> MfaSessions => Set<MfaSession>();
     public DbSet<MfaManagementSession> MfaManagementSessions => Set<MfaManagementSession>();
+    public DbSet<MfaLoginEnrollmentSession> MfaLoginEnrollmentSessions => Set<MfaLoginEnrollmentSession>();
     public DbSet<AccessTokenSession> AccessTokenSessions => Set<AccessTokenSession>();
     public DbSet<RefreshTokenSession> RefreshTokenSessions => Set<RefreshTokenSession>();
     public DbSet<SecurityAuditEvent> SecurityAuditEvents => Set<SecurityAuditEvent>();

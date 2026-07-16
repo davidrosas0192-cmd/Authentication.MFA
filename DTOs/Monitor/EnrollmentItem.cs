@@ -1,0 +1,13 @@
+namespace Authentication.Fido2.DTOs.Monitor;
+
+public class EnrollmentItem
+{
+    public Guid Id { get; set; }
+    public long UserId { get; set; }
+    public string Status { get; set; } = default!;
+    public int StepVersion { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+    public DateTime ExpiresAtUtc { get; set; }
+    public DateTime? CompletedAtUtc { get; set; }
+}

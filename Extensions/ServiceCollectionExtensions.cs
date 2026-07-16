@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddSingleton<IRateLimitingService, RateLimitingService>();
         services.AddSingleton<IDistributedLockService, DistributedLockService>();
+        services.AddScoped<IMonitorService, MonitorService>();
         services.AddHostedService<CleanupService>();
 
         return services;

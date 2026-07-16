@@ -1342,6 +1342,16 @@ public class MfaService : IMfaService
             );
         }
 
+        // Rate limiting: 3 OTP sends per 10 min per user (Twilio cost protection)
+        var loginEnrollKey = $"login_enrollment_{userId}";
+        if (!_rateLimitingService.IsAllowed(loginEnrollKey, maxAttempts: 3, windowSeconds: 600))
+        {
+            return Result<StartLoginEnrollmentResponse>.Failure(
+                "Too many enrollment attempts. Please try again later.",
+                StatusCodes.Status429TooManyRequests
+            );
+        }
+
         var startResult = await StartEnrollmentCoreAsync(
             userId,
             new StartMfaEnrollmentRequest { Method = request.Method, ContactValue = request.ContactValue },
@@ -1403,6 +1413,52 @@ public class MfaService : IMfaService
             return Result<StartMfaEnrollmentResponse>.Failure(
                 "Contact value is required.",
                 StatusCodes.Status400BadRequest
+            );
+        }
+
+        // R1/R2: Reject if method already active — user should reconfigure instead
+        var existingMethod = await _mfaMethodRepository.GetByUserIdAndMethodAsync(
+            userId, normalizedMethod, cancellationToken);
+
+        if (existingMethod is not null && existingMethod.IsEnabled)
+        {
+            return Result<StartMfaEnrollmentResponse>.Failure(
+                $"MFA method '{normalizedMethod}' is already configured. Use reconfigure to update it.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        // R3: Reject if contactValue is already used by another active user
+        var contactInUse = await _mfaMethodRepository.IsContactValueInUseAsync(
+            contact, normalizedMethod, userId, cancellationToken);
+
+        if (contactInUse)
+        {
+            return Result<StartMfaEnrollmentResponse>.Failure(
+                "This contact value is already registered with another account.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        // Rate limiting: 3 OTP sends per 15 min per user (Twilio cost protection)
+        var enrollRateLimitKey = $"enrollment_otp_{userId}";
+        if (!_rateLimitingService.IsAllowed(enrollRateLimitKey, maxAttempts: 3, windowSeconds: 900))
+        {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.mfa.enrollment.rate_limited",
+                "Warning",
+                false,
+                userId,
+                null,
+                "Enrollment OTP rate limit exceeded",
+                new { method = normalizedMethod },
+                cancellationToken
+            );
+
+            return Result<StartMfaEnrollmentResponse>.Failure(
+                "Too many enrollment attempts. Please try again later.",
+                StatusCodes.Status429TooManyRequests
             );
         }
 
@@ -1977,6 +2033,40 @@ public class MfaService : IMfaService
             return Result<StartMfaReconfigureResponse>.Failure(
                 "Contact value is required.",
                 StatusCodes.Status400BadRequest
+            );
+        }
+
+        // R3: Reject if contactValue is already used by another active user
+        var contactInUse = await _mfaMethodRepository.IsContactValueInUseAsync(
+            contact, normalizedMethod, userId, cancellationToken);
+
+        if (contactInUse)
+        {
+            return Result<StartMfaReconfigureResponse>.Failure(
+                "This contact value is already registered with another account.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        // Rate limiting: 3 OTP sends per 15 min per user (Twilio cost protection)
+        var reconfigRateLimitKey = $"reconfigure_otp_{userId}";
+        if (!_rateLimitingService.IsAllowed(reconfigRateLimitKey, maxAttempts: 3, windowSeconds: 900))
+        {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.mfa.reconfigure.rate_limited",
+                "Warning",
+                false,
+                userId,
+                null,
+                "Reconfigure OTP rate limit exceeded",
+                new { method = normalizedMethod },
+                cancellationToken
+            );
+
+            return Result<StartMfaReconfigureResponse>.Failure(
+                "Too many reconfiguration attempts. Please try again later.",
+                StatusCodes.Status429TooManyRequests
             );
         }
 

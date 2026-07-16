@@ -16,6 +16,12 @@ public interface IUserMfaMethodRepository
         string method,
         CancellationToken cancellationToken
     );
+    Task<bool> IsContactValueInUseAsync(
+        string contactValue,
+        string method,
+        long excludeUserId,
+        CancellationToken cancellationToken
+    );
     Task AddAsync(UserMfaMethod method, CancellationToken cancellationToken);
     Task UpdateAsync(UserMfaMethod method, CancellationToken cancellationToken);
 }

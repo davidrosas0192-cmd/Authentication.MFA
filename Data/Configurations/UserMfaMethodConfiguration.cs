@@ -17,5 +17,9 @@ public class UserMfaMethodConfiguration : IEntityTypeConfiguration<UserMfaMethod
 
         builder.HasIndex(x => new { x.UserId, x.Method }).IsUnique();
         builder.HasIndex(x => new { x.UserId, x.IsEnabled });
+        // Filtered index for fast global contactValue uniqueness checks (only active methods)
+        builder.HasIndex(x => new { x.Method, x.ContactValue })
+               .HasFilter("[IsEnabled] = 1")
+               .HasDatabaseName("IX_UserMfaMethods_Method_ContactValue_Active");
     }
 }

@@ -53,6 +53,22 @@ public class UserMfaMethodRepository : IUserMfaMethodRepository
         );
     }
 
+    public Task<bool> IsContactValueInUseAsync(
+        string contactValue,
+        string method,
+        long excludeUserId,
+        CancellationToken cancellationToken
+    )
+    {
+        return _context.UserMfaMethods.AnyAsync(
+            x => x.ContactValue == contactValue
+              && x.Method == method
+              && x.IsEnabled
+              && x.UserId != excludeUserId,
+            cancellationToken
+        );
+    }
+
     public async Task AddAsync(UserMfaMethod method, CancellationToken cancellationToken)
     {
         await _context.UserMfaMethods.AddAsync(method, cancellationToken);

@@ -16,6 +16,7 @@ namespace Authentication.Fido2.Services.Implementations;
 
 public class Fido2MfaService : IFido2MfaService
 {
+    private const int MaxFido2CredentialsPerUser = 2;
     private readonly IFido2 _fido2;
     private readonly IUserRepository _userRepository;
     private readonly IUserMfaMethodRepository _userMfaMethodRepository;
@@ -27,6 +28,7 @@ public class Fido2MfaService : IFido2MfaService
     private readonly IAccessTokenSessionRepository _accessTokenSessionRepository;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly ISessionFactory _sessionFactory;
+    private readonly IRateLimitingService _rateLimitingService;
     private readonly IAuditService _auditService;
     private readonly JwtOptions _jwtOptions;
 
@@ -42,6 +44,7 @@ public class Fido2MfaService : IFido2MfaService
         IAccessTokenSessionRepository accessTokenSessionRepository,
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
         ISessionFactory sessionFactory,
+        IRateLimitingService rateLimitingService,
         IAuditService auditService,
         IOptions<JwtOptions> jwtOptions
     )
@@ -67,6 +70,7 @@ public class Fido2MfaService : IFido2MfaService
             mfaTempTokenSessionRepository
             ?? throw new ArgumentNullException(nameof(mfaTempTokenSessionRepository));
         _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
+        _rateLimitingService = rateLimitingService ?? throw new ArgumentNullException(nameof(rateLimitingService));
         _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
         _jwtOptions = jwtOptions.Value;
     }
@@ -118,6 +122,37 @@ public class Fido2MfaService : IFido2MfaService
             user.Id,
             cancellationToken
         );
+
+        // R4: Limit to 2 FIDO2 devices per user (1 primary + 1 backup)
+        if (existingCredentials.Count >= MaxFido2CredentialsPerUser)
+        {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.fido2.enrollment.limit_reached",
+                "Warning",
+                false,
+                user.Id,
+                user.Username,
+                $"Maximum FIDO2 devices ({MaxFido2CredentialsPerUser}) reached",
+                new { current = existingCredentials.Count },
+                cancellationToken
+            );
+
+            return Result<Fido2OptionsResponse>.Failure(
+                $"Maximum number of FIDO2 devices ({MaxFido2CredentialsPerUser}) reached. Remove an existing device before adding a new one.",
+                StatusCodes.Status409Conflict
+            );
+        }
+
+        // Rate limiting: 5 requests per 15 min per user
+        var fido2EnrollKey = $"fido2_enroll_{userId}";
+        if (!_rateLimitingService.IsAllowed(fido2EnrollKey, maxAttempts: 5, windowSeconds: 900))
+        {
+            return Result<Fido2OptionsResponse>.Failure(
+                "Too many FIDO2 enrollment attempts. Please try again later.",
+                StatusCodes.Status429TooManyRequests
+            );
+        }
 
         var excludeCredentials = existingCredentials
             .Select(x => new PublicKeyCredentialDescriptor(x.CredentialId))
@@ -193,6 +228,16 @@ public class Fido2MfaService : IFido2MfaService
         CancellationToken cancellationToken
     )
     {
+        // Rate limiting: 5 requests per 15 min per user
+        var fido2CompleteKey = $"fido2_enroll_complete_{userId}";
+        if (!_rateLimitingService.IsAllowed(fido2CompleteKey, maxAttempts: 5, windowSeconds: 900))
+        {
+            return Result<CompleteFido2EnrollmentResponse>.Failure(
+                "Too many FIDO2 enrollment attempts. Please try again later.",
+                StatusCodes.Status429TooManyRequests
+            );
+        }
+
         var transaction = await _transactionRepository.GetByIdAsync(
             request.TransactionId,
             cancellationToken
@@ -345,6 +390,16 @@ public class Fido2MfaService : IFido2MfaService
         CancellationToken cancellationToken
     )
     {
+        // Rate limiting: 10 requests per 5 min per user
+        var fido2AuthKey = $"fido2_auth_{userId}";
+        if (!_rateLimitingService.IsAllowed(fido2AuthKey, maxAttempts: 10, windowSeconds: 300))
+        {
+            return Result<Fido2OptionsResponse>.Failure(
+                "Too many FIDO2 authentication attempts. Please try again later.",
+                StatusCodes.Status429TooManyRequests
+            );
+        }
+
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
 
         if (user is null)

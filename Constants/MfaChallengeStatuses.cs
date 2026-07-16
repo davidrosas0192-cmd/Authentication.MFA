@@ -9,4 +9,5 @@ public static class MfaChallengeStatuses
     public const string Revoked = "revoked";
     public const string Expired = "expired";
     public const string Failed = "failed";
+    public const string Locked = "locked";
 }

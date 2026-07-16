@@ -13,6 +13,8 @@ public class MfaChallenge
     public string? Channel { get; set; }
     public string? ContactValue { get; set; }
     public string Status { get; set; } = default!;
+    public int FailedAttempts { get; set; } = 0;
+    public DateTime? LastFailedAttemptAtUtc { get; set; }
     public DateTime ExpiresAtUtc { get; set; }
     public DateTime? VerifiedAtUtc { get; set; }
     public string? IpAddress { get; set; }

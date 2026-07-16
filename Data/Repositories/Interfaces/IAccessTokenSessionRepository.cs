@@ -8,4 +8,5 @@ public interface IAccessTokenSessionRepository
     Task<AccessTokenSession?> GetActiveByJtiAsync(string tokenJti, CancellationToken cancellationToken);
     Task RevokeByJtiAsync(string tokenJti, string reason, CancellationToken cancellationToken);
     Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken);
+    Task<int> DeleteRevokedSessionsAsync(DateTime olderThanUtc, CancellationToken cancellationToken);
 }

@@ -76,4 +76,13 @@ public class AccessTokenSessionRepository : IAccessTokenSessionRepository
 
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<int> DeleteRevokedSessionsAsync(DateTime olderThanUtc, CancellationToken cancellationToken)
+    {
+        var count = await _context.AccessTokenSessions
+            .Where(x => x.RevokedAtUtc != null && x.RevokedAtUtc < olderThanUtc)
+            .ExecuteDeleteAsync(cancellationToken);
+        
+        return count;
+    }
 }

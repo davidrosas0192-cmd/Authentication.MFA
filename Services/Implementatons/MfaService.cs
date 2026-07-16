@@ -27,6 +27,8 @@ public class MfaService : IMfaService
     private readonly ITokenService _tokenService;
     private readonly IAccessTokenSessionRepository _accessTokenSessionRepository;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
+    private readonly IRateLimitingService _rateLimitingService;
+    private readonly IDistributedLockService _distributedLockService;
     private readonly IAuditService _auditService;
     private readonly JwtOptions _jwtOptions;
 
@@ -41,6 +43,8 @@ public class MfaService : IMfaService
         ITokenService tokenService,
         IAccessTokenSessionRepository accessTokenSessionRepository,
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
+        IRateLimitingService rateLimitingService,
+        IDistributedLockService distributedLockService,
         IAuditService auditService,
         IOptions<JwtOptions> jwtOptions
     )
@@ -55,6 +59,8 @@ public class MfaService : IMfaService
         _tokenService = tokenService;
         _accessTokenSessionRepository = accessTokenSessionRepository;
         _mfaTempTokenSessionRepository = mfaTempTokenSessionRepository;
+        _rateLimitingService = rateLimitingService;
+        _distributedLockService = distributedLockService;
         _auditService = auditService;
         _jwtOptions = jwtOptions.Value;
     }
@@ -376,6 +382,16 @@ public class MfaService : IMfaService
         CancellationToken cancellationToken
     )
     {
+        // Rate limiting: 10 challenge starts per 15 minutes per user
+        var rateLimitKey = $"mfa_start_{userId}";
+        if (!_rateLimitingService.IsAllowed(rateLimitKey, maxAttempts: 10, windowSeconds: 900))
+        {
+            return Result<StartMfaChallengeResponse>.Failure(
+                "Too many challenge requests. Please try again later.",
+                StatusCodes.Status429TooManyRequests
+            );
+        }
+
         var challenge = await _mfaChallengeRepository.GetByIdAsync(
             mfaTransactionId,
             cancellationToken
@@ -410,11 +426,62 @@ public class MfaService : IMfaService
             normalizedMethod != MfaMethodTypes.Sms
             && normalizedMethod != MfaMethodTypes.Email
             && normalizedMethod != MfaMethodTypes.RecoveryCode
+            && normalizedMethod != MfaMethodTypes.Fido2
         )
         {
             return Result<StartMfaChallengeResponse>.Failure(
-                "Only sms, email, and recovery_code challenge start are supported in this endpoint.",
+                "Only sms, email, recovery_code, and fido2 challenge start are supported in this endpoint.",
                 StatusCodes.Status400BadRequest
+            );
+        }
+
+        // FIDO2 is handled separately via the Fido2Controller
+        if (normalizedMethod == MfaMethodTypes.Fido2)
+        {
+            var hasFido2 = await _mfaMethodRepository.GetEnabledByUserIdAndMethodAsync(
+                challenge.UserId,
+                MfaMethodTypes.Fido2,
+                cancellationToken
+            );
+
+            if (hasFido2 is null)
+            {
+                return Result<StartMfaChallengeResponse>.Failure(
+                    "Selected MFA method is not available for this user.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            challenge.Method = normalizedMethod;
+            challenge.Status = MfaChallengeStatuses.Pending;
+            challenge.ContinuationToken = CreateContinuationToken();
+            challenge.StepVersion += 1;
+            challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5);
+            challenge.IpAddress = ipAddress ?? challenge.IpAddress;
+            challenge.UserAgent = userAgent ?? challenge.UserAgent;
+
+            await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+            await _auditService.TrackAuthenticationEventAsync(
+                challenge.UserId,
+                null,
+                "mfa_challenge_start",
+                normalizedMethod,
+                true,
+                null,
+                cancellationToken
+            );
+
+            return Result<StartMfaChallengeResponse>.Success(
+                new StartMfaChallengeResponse
+                {
+                    MfaTransactionId = challenge.Id,
+                    ContinuationToken = challenge.ContinuationToken,
+                    Method = normalizedMethod,
+                    Status = challenge.Status,
+                    ExpiresAtUtc = challenge.ExpiresAtUtc,
+                },
+                "MFA FIDO2 challenge started. Use FIDO2 endpoint to complete."
             );
         }
 
@@ -828,6 +895,44 @@ public class MfaService : IMfaService
         CancellationToken cancellationToken
     )
     {
+        // Rate limiting: 10 attempts per 15 minutes per user
+        var rateLimitKey = $"mfa_verify_{userId}";
+        if (!_rateLimitingService.IsAllowed(rateLimitKey, maxAttempts: 10, windowSeconds: 900))
+        {
+            await _auditService.TrackAuthenticationEventAsync(
+                userId,
+                null,
+                "mfa_challenge_verify",
+                "unknown",
+                false,
+                "Rate limit exceeded",
+                cancellationToken
+            );
+
+            return Result<LoginResponse>.Failure(
+                "Too many verification attempts. Please try again later.",
+                StatusCodes.Status429TooManyRequests
+            );
+        }
+
+        // Use distributed lock to prevent concurrent verification of the same challenge
+        var lockKey = $"mfa_verify_{mfaTransactionId}";
+        return await _distributedLockService.ExecuteLockedAsync(
+            lockKey,
+            async ct => await VerifyChallengeInternalAsync(userId, mfaTransactionId, continuationToken, code, ct),
+            timeoutSeconds: 5,
+            cancellationToken: cancellationToken
+        );
+    }
+
+    private async Task<Result<LoginResponse>> VerifyChallengeInternalAsync(
+        long userId,
+        Guid mfaTransactionId,
+        string continuationToken,
+        string code,
+        CancellationToken cancellationToken
+    )
+    {
         var challenge = await _mfaChallengeRepository.GetByIdAsync(
             mfaTransactionId,
             cancellationToken
@@ -896,7 +1001,32 @@ public class MfaService : IMfaService
 
             if (!isConsumed)
             {
-                challenge.Status = MfaChallengeStatuses.Failed;
+                challenge.FailedAttempts++;
+                challenge.LastFailedAttemptAtUtc = DateTime.UtcNow;
+
+                // Check if max attempts exceeded
+                if (challenge.FailedAttempts >= MfaChallengeOptions.MaxFailedAttempts)
+                {
+                    challenge.Status = MfaChallengeStatuses.Locked;
+                    await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+                    await _auditService.TrackAuthenticationEventAsync(
+                        challenge.UserId,
+                        null,
+                        "mfa_challenge_verify",
+                        challenge.Method,
+                        false,
+                        $"Maximum failed attempts ({MfaChallengeOptions.MaxFailedAttempts}) exceeded",
+                        cancellationToken
+                    );
+
+                    return Result<LoginResponse>.Failure(
+                        "Too many failed verification attempts. Please try again later.",
+                        StatusCodes.Status429TooManyRequests
+                    );
+                }
+
+                challenge.Status = MfaChallengeStatuses.Pending;
                 await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
 
                 await _auditService.TrackAuthenticationEventAsync(
@@ -1018,7 +1148,32 @@ public class MfaService : IMfaService
 
         if (!isApproved)
         {
-            challenge.Status = MfaChallengeStatuses.Failed;
+            challenge.FailedAttempts++;
+            challenge.LastFailedAttemptAtUtc = DateTime.UtcNow;
+
+            // Check if max attempts exceeded
+            if (challenge.FailedAttempts >= MfaChallengeOptions.MaxFailedAttempts)
+            {
+                challenge.Status = MfaChallengeStatuses.Locked;
+                await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+                await _auditService.TrackAuthenticationEventAsync(
+                    challenge.UserId,
+                    null,
+                    "mfa_challenge_verify",
+                    challenge.Method,
+                    false,
+                    $"Maximum failed attempts ({MfaChallengeOptions.MaxFailedAttempts}) exceeded",
+                    cancellationToken
+                );
+
+                return Result<LoginResponse>.Failure(
+                    "Too many failed verification attempts. Please try again later.",
+                    StatusCodes.Status429TooManyRequests
+                );
+            }
+
+            challenge.Status = MfaChallengeStatuses.Pending;
             await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
 
             await _auditService.TrackAuthenticationEventAsync(

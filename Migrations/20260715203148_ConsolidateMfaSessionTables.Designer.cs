@@ -4,6 +4,7 @@ using Authentication.Fido2.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Authentication.Fido2.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715203148_ConsolidateMfaSessionTables")]
+    partial class ConsolidateMfaSessionTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -205,15 +208,9 @@ namespace Authentication.Fido2.Migrations
                     b.Property<DateTime>("ExpiresAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("FailedAttempts")
-                        .HasColumnType("int");
-
                     b.Property<string>("IpAddress")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("LastFailedAttemptAtUtc")
-                        .HasColumnType("datetime2");
 
                     b.Property<string>("Method")
                         .HasMaxLength(30)
@@ -395,64 +392,6 @@ namespace Authentication.Fido2.Migrations
                         {
                             t.HasCheckConstraint("CK_MfaSessions_SessionType", "[SessionType] IN ('temp_token', 'login_enrollment')");
                         });
-                });
-
-            modelBuilder.Entity("Authentication.Fido2.Entities.RefreshTokenSession", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("AccessTokenSessionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("ExpiresAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("IssuedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("LastRotatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("PreviousTokenSessionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("RevokeReason")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("RevokedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<long>("UserId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AccessTokenSessionId");
-
-                    b.HasIndex("PreviousTokenSessionId");
-
-                    b.HasIndex("TokenHash")
-                        .IsUnique();
-
-                    b.HasIndex("UserId", "ExpiresAtUtc", "RevokedAtUtc");
-
-                    b.ToTable("RefreshTokenSessions", (string)null);
                 });
 
             modelBuilder.Entity("Authentication.Fido2.Entities.SecurityAuditEvent", b =>

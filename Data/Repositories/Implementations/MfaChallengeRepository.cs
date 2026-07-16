@@ -49,4 +49,32 @@ public class MfaChallengeRepository : IMfaChallengeRepository
             cancellationToken
         );
     }
+
+    public async Task<int> DeleteExpiredChallengesAsync(DateTime olderThanUtc, CancellationToken cancellationToken)
+    {
+        var count = await _context.MfaChallenges
+            .Where(x => x.ExpiresAtUtc < olderThanUtc && x.Status == "expired")
+            .ExecuteDeleteAsync(cancellationToken);
+        
+        return count;
+    }
+
+    public async Task<int> DeleteLockedChallengesAsync(DateTime olderThanUtc, CancellationToken cancellationToken)
+    {
+        var count = await _context.MfaChallenges
+            .Where(x => x.CreatedAtUtc < olderThanUtc && x.Status == "locked")
+            .ExecuteDeleteAsync(cancellationToken);
+        
+        return count;
+    }
+
+    public async Task<int> DeleteCompletedChallengesAsync(DateTime olderThanUtc, CancellationToken cancellationToken)
+    {
+        var count = await _context.MfaChallenges
+            .Where(x => x.CreatedAtUtc < olderThanUtc && 
+                   (x.Status == "verified" || x.Status == "consumed"))
+            .ExecuteDeleteAsync(cancellationToken);
+        
+        return count;
+    }
 }

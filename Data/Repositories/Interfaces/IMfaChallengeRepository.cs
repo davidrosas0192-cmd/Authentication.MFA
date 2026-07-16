@@ -13,4 +13,7 @@ public interface IMfaChallengeRepository
         DateTime sinceUtc,
         CancellationToken cancellationToken
     );
+    Task<int> DeleteExpiredChallengesAsync(DateTime olderThanUtc, CancellationToken cancellationToken);
+    Task<int> DeleteLockedChallengesAsync(DateTime olderThanUtc, CancellationToken cancellationToken);
+    Task<int> DeleteCompletedChallengesAsync(DateTime olderThanUtc, CancellationToken cancellationToken);
 }

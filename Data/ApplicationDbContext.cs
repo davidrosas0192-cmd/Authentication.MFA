@@ -17,10 +17,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<Fido2Transaction> Fido2Transations => Set<Fido2Transaction>();
     public DbSet<UserMfaMethod> UserMfaMethods => Set<UserMfaMethod>();
     public DbSet<MfaChallenge> MfaChallenges => Set<MfaChallenge>();
-    public DbSet<MfaLoginEnrollmentSession> MfaLoginEnrollmentSessions => Set<MfaLoginEnrollmentSession>();
+    public DbSet<MfaSession> MfaSessions => Set<MfaSession>();
     public DbSet<MfaManagementSession> MfaManagementSessions => Set<MfaManagementSession>();
-    public DbSet<MfaTempTokenSession> MfaTempTokenSessions => Set<MfaTempTokenSession>();
     public DbSet<AccessTokenSession> AccessTokenSessions => Set<AccessTokenSession>();
+    public DbSet<RefreshTokenSession> RefreshTokenSessions => Set<RefreshTokenSession>();
     public DbSet<SecurityAuditEvent> SecurityAuditEvents => Set<SecurityAuditEvent>();
     public DbSet<AuthenticationAuditEvent> AuthenticationAuditEvents => Set<AuthenticationAuditEvent>();
     public DbSet<UserRecoveryCodeBatch> UserRecoveryCodeBatches => Set<UserRecoveryCodeBatch>();

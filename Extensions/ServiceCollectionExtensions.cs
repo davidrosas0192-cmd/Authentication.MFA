@@ -32,11 +32,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMfaTempTokenSessionRepository, MfaTempTokenSessionRepository>();
         services.AddScoped<IMfaLoginEnrollmentSessionRepository, MfaLoginEnrollmentSessionRepository>();
         services.AddScoped<IAccessTokenSessionRepository, AccessTokenSessionRepository>();
+        services.AddScoped<IRefreshTokenSessionRepository, RefreshTokenSessionRepository>();
         services.AddScoped<IUserMfaMethodRepository, UserMfaMethodRepository>();
         services.AddScoped<IMfaChallengeRepository, MfaChallengeRepository>();
         services.AddScoped<IMfaManagementSessionRepository, MfaManagementSessionRepository>();
         services.AddScoped<IUserRecoveryCodeRepository, UserRecoveryCodeRepository>();
         services.AddScoped<ITokenService, TokenService>();
+        services.AddSingleton<IRateLimitingService, RateLimitingService>();
+        services.AddSingleton<IDistributedLockService, DistributedLockService>();
+        services.AddHostedService<CleanupService>();
 
         return services;
     }

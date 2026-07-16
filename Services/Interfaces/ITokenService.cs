@@ -8,4 +8,5 @@ public interface ITokenService
     string CreateMfaToken(User user, Guid mfaTransactionId, string tokenJti);
     string CreateLoginEnrollmentToken(User user, Guid enrollmentSessionId, string tokenJti);
     string CreateRefreshToken();
+    string HashRefreshToken(string token);
 }

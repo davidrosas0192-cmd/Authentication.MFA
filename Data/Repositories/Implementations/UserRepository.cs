@@ -1,4 +1,3 @@
-using System.Net.WebSockets;
 using Authentication.Fido2.Data;
 using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.Entities;
@@ -23,7 +22,7 @@ public class UserRepository : IUserRepository
 
     public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken)
     {
-        User response = await _context
+        var response = await _context
             .Users.AsNoTracking()
             .Where(q => q.Email == email)
             .FirstOrDefaultAsync(cancellationToken);

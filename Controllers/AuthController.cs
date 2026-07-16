@@ -66,6 +66,30 @@ public class AuthController : ControllerBase
         return ToActionResult(response);
     }
 
+    [HttpPost("/api/sessions/refresh")]
+    public async Task<IActionResult> RefreshToken(
+        [FromBody] RefreshTokenRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var response = await _authService.RefreshTokenAsync(
+                request.RefreshToken,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers["User-Agent"].ToString(),
+                cancellationToken
+            );
+
+            return ToActionResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred during token refresh.");
+            return Problem("An error occurred during token refresh. Please try again later.");
+        }
+    }
+
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
     [HttpDelete("/api/mfa/sessions/current")]
     public async Task<IActionResult> CancelAuthentication(CancellationToken cancellationToken)

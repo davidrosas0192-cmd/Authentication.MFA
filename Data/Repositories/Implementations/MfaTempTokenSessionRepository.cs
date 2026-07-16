@@ -1,3 +1,4 @@
+using Authentication.Fido2.Constants;
 using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -15,29 +16,76 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
 
     public async Task AddAsync(MfaTempTokenSession session, CancellationToken cancellationToken)
     {
-        await _context.MfaTempTokenSessions.AddAsync(session, cancellationToken);
+        await _context.MfaSessions.AddAsync(
+            new MfaSession
+            {
+                Id = session.Id,
+                UserId = session.UserId,
+                SessionType = MfaSessionTypes.TempToken,
+                TokenJti = session.TokenJti,
+                ExpiresAtUtc = session.ExpiresAtUtc,
+                CreatedAtUtc = session.IssuedAtUtc,
+                UpdatedAtUtc = session.IssuedAtUtc,
+                MfaTransactionId = session.MfaTransactionId,
+                IssuedAtUtc = session.IssuedAtUtc,
+                ConsumedAtUtc = session.ConsumedAtUtc,
+                RevokedAtUtc = session.RevokedAtUtc,
+                IpAddress = session.IpAddress,
+                UserAgent = session.UserAgent,
+            },
+            cancellationToken
+        );
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public Task<MfaTempTokenSession?> GetActiveByJtiAsync(string tokenJti, CancellationToken cancellationToken)
+    public async Task<MfaTempTokenSession?> GetActiveByJtiAsync(
+        string tokenJti,
+        CancellationToken cancellationToken
+    )
     {
         var now = DateTime.UtcNow;
 
-        return _context.MfaTempTokenSessions
+        var session = await _context
+            .MfaSessions
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                x => x.TokenJti == tokenJti
+                x => x.SessionType == MfaSessionTypes.TempToken
+                    && x.TokenJti == tokenJti
                     && x.ConsumedAtUtc == null
                     && x.RevokedAtUtc == null
                     && x.ExpiresAtUtc > now,
                 cancellationToken
             );
+
+        if (session is null)
+        {
+            return null;
+        }
+
+        return new MfaTempTokenSession
+        {
+            Id = session.Id,
+            UserId = session.UserId,
+            MfaTransactionId = session.MfaTransactionId ?? Guid.Empty,
+            TokenJti = session.TokenJti,
+            IssuedAtUtc = session.IssuedAtUtc ?? session.CreatedAtUtc,
+            ExpiresAtUtc = session.ExpiresAtUtc,
+            ConsumedAtUtc = session.ConsumedAtUtc,
+            RevokedAtUtc = session.RevokedAtUtc,
+            IpAddress = session.IpAddress,
+            UserAgent = session.UserAgent,
+        };
     }
 
     public async Task ConsumeByTransactionAsync(Guid mfaTransactionId, CancellationToken cancellationToken)
     {
         var sessions = await _context
-            .MfaTempTokenSessions.Where(x => x.MfaTransactionId == mfaTransactionId && x.ConsumedAtUtc == null)
+            .MfaSessions.Where(
+                x =>
+                    x.SessionType == MfaSessionTypes.TempToken
+                    && x.MfaTransactionId == mfaTransactionId
+                    && x.ConsumedAtUtc == null
+            )
             .ToListAsync(cancellationToken);
 
         if (sessions.Count == 0)
@@ -59,8 +107,10 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
         var now = DateTime.UtcNow;
 
         var sessions = await _context
-            .MfaTempTokenSessions.Where(
-                x => x.TokenJti == tokenJti
+            .MfaSessions.Where(
+                x =>
+                    x.SessionType == MfaSessionTypes.TempToken
+                    && x.TokenJti == tokenJti
                     && x.ConsumedAtUtc == null
                     && x.RevokedAtUtc == null
                     && x.ExpiresAtUtc > now
@@ -85,8 +135,10 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
         var now = DateTime.UtcNow;
 
         var sessions = await _context
-            .MfaTempTokenSessions.Where(
-                x => x.UserId == userId
+            .MfaSessions.Where(
+                x =>
+                    x.SessionType == MfaSessionTypes.TempToken
+                    && x.UserId == userId
                     && x.ConsumedAtUtc == null
                     && x.RevokedAtUtc == null
                     && x.ExpiresAtUtc > now

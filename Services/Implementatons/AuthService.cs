@@ -15,6 +15,8 @@ public class AuthService : IAuthService
     private readonly IAccessTokenSessionRepository _accessTokenSessionRepository;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly IMfaLoginEnrollmentSessionRepository _mfaLoginEnrollmentSessionRepository;
+    private readonly IRefreshTokenSessionRepository _refreshTokenSessionRepository;
+    private readonly IRateLimitingService _rateLimitingService;
     private readonly IAuditService _auditService;
     private readonly IMfaService _mfaService;
     private readonly JwtOptions _jwtOptions;
@@ -26,6 +28,8 @@ public class AuthService : IAuthService
         IAccessTokenSessionRepository accessTokenSessionRepository,
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
         IMfaLoginEnrollmentSessionRepository mfaLoginEnrollmentSessionRepository,
+        IRefreshTokenSessionRepository refreshTokenSessionRepository,
+        IRateLimitingService rateLimitingService,
         IAuditService auditService,
         IMfaService mfaService,
         IOptions<JwtOptions> jwtOptions,
@@ -43,6 +47,11 @@ public class AuthService : IAuthService
         _mfaLoginEnrollmentSessionRepository =
             mfaLoginEnrollmentSessionRepository
             ?? throw new ArgumentNullException(nameof(mfaLoginEnrollmentSessionRepository));
+        _refreshTokenSessionRepository =
+            refreshTokenSessionRepository
+            ?? throw new ArgumentNullException(nameof(refreshTokenSessionRepository));
+        _rateLimitingService =
+            rateLimitingService ?? throw new ArgumentNullException(nameof(rateLimitingService));
         _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
         _mfaService = mfaService ?? throw new ArgumentNullException(nameof(mfaService));
         _jwtOptions = jwtOptions.Value;
@@ -56,6 +65,28 @@ public class AuthService : IAuthService
         CancellationToken cancellationToken
     )
     {
+        // Rate limiting: 10 attempts per 15 minutes per IP
+        var rateLimitKey = $"login_{ipAddress ?? "unknown"}";
+        if (!_rateLimitingService.IsAllowed(rateLimitKey, maxAttempts: 10, windowSeconds: 900))
+        {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.password.login_rate_limited",
+                "Warning",
+                false,
+                null,
+                null,
+                "Rate limit exceeded",
+                new { ipAddress },
+                cancellationToken
+            );
+
+            return Result<LoginResponse>.Failure(
+                "Too many login attempts. Please try again later.",
+                StatusCodes.Status429TooManyRequests
+            );
+        }
+
         var user = await _userRepository.GetByUsernameOrEmailAsync(
             request.Username,
             cancellationToken
@@ -266,19 +297,33 @@ public class AuthService : IAuthService
         var accessToken = _tokenService.CreateAccessToken(user, accessTokenJti);
         var refreshToken = _tokenService.CreateRefreshToken();
 
-        await _accessTokenSessionRepository.AddAsync(
-            new Entities.AccessTokenSession
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                TokenJti = accessTokenJti,
-                IssuedAtUtc = DateTime.UtcNow,
-                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
-                IpAddress = ipAddress,
-                UserAgent = userAgent,
-            },
-            cancellationToken
-        );
+        var accessTokenSession = new Entities.AccessTokenSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenJti = accessTokenJti,
+            IssuedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+        };
+
+        await _accessTokenSessionRepository.AddAsync(accessTokenSession, cancellationToken);
+
+        // Create refresh token session (5 days validity)
+        var refreshTokenSession = new Entities.RefreshTokenSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = _tokenService.HashRefreshToken(refreshToken),
+            AccessTokenSessionId = accessTokenSession.Id,
+            IssuedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddDays(5),
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+        };
+
+        await _refreshTokenSessionRepository.AddAsync(refreshTokenSession, cancellationToken);
 
         return Result<LoginResponse>.Success(
             new LoginResponse
@@ -342,5 +387,151 @@ public class AuthService : IAuthService
         );
 
         return Result.Success("Authentication canceled.");
+    }
+
+    public async Task<Result<LoginResponse>> RefreshTokenAsync(
+        string refreshToken,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken
+    )
+    {
+        // Rate limiting: 30 refresh attempts per 15 minutes per IP
+        var rateLimitKey = $"refresh_{ipAddress ?? "unknown"}";
+        if (!_rateLimitingService.IsAllowed(rateLimitKey, maxAttempts: 30, windowSeconds: 900))
+        {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.refresh_token.rate_limited",
+                "Warning",
+                false,
+                null,
+                null,
+                "Rate limit exceeded",
+                new { ipAddress },
+                cancellationToken
+            );
+
+            return Result<LoginResponse>.Failure(
+                "Too many token refresh attempts. Please try again later.",
+                StatusCodes.Status429TooManyRequests
+            );
+        }
+
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            return Result<LoginResponse>.Failure(
+                "Invalid refresh token.",
+                StatusCodes.Status401Unauthorized
+            );
+        }
+
+        var tokenHash = _tokenService.HashRefreshToken(refreshToken);
+        var refreshTokenSession = await _refreshTokenSessionRepository.GetByTokenHashAsync(
+            tokenHash,
+            cancellationToken
+        );
+
+        if (refreshTokenSession is null)
+        {
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.refresh_token_rejected",
+                "Warning",
+                false,
+                null,
+                null,
+                "Invalid or revoked refresh token",
+                null,
+                cancellationToken
+            );
+
+            return Result<LoginResponse>.Failure(
+                "Invalid or expired refresh token.",
+                StatusCodes.Status401Unauthorized
+            );
+        }
+
+        var user = await _userRepository.GetByIdAsync(refreshTokenSession.UserId, cancellationToken);
+        if (user is null || !user.IsActive)
+        {
+            await _refreshTokenSessionRepository.RevokeByIdAsync(
+                refreshTokenSession.Id,
+                "user_inactive",
+                cancellationToken
+            );
+
+            return Result<LoginResponse>.Failure(
+                "User not found or inactive.",
+                StatusCodes.Status404NotFound
+            );
+        }
+
+        // Revoke old refresh token
+        refreshTokenSession.RevokedAtUtc = DateTime.UtcNow;
+        refreshTokenSession.RevokeReason = "rotated";
+        await _refreshTokenSessionRepository.UpdateAsync(refreshTokenSession, cancellationToken);
+
+        // Create new access token
+        var accessTokenJti = Guid.NewGuid().ToString("N");
+        var accessToken = _tokenService.CreateAccessToken(user, accessTokenJti);
+        var newRefreshToken = _tokenService.CreateRefreshToken();
+
+        // Create new access token session
+        var accessTokenSession = new Entities.AccessTokenSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenJti = accessTokenJti,
+            IssuedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+        };
+
+        await _accessTokenSessionRepository.AddAsync(accessTokenSession, cancellationToken);
+
+        // Create new refresh token session
+        var newRefreshTokenSession = new Entities.RefreshTokenSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = _tokenService.HashRefreshToken(newRefreshToken),
+            AccessTokenSessionId = accessTokenSession.Id,
+            IssuedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddDays(5),
+            LastRotatedAtUtc = DateTime.UtcNow,
+            PreviousTokenSessionId = refreshTokenSession.Id,
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+        };
+
+        await _refreshTokenSessionRepository.AddAsync(newRefreshTokenSession, cancellationToken);
+
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.refresh_token_rotated",
+            "Information",
+            true,
+            user.Id,
+            user.Username,
+            null,
+            null,
+            cancellationToken
+        );
+
+        var allowedMfaMethods = await _mfaService.GetAllowedMethodsAsync(user.Id, cancellationToken);
+
+        return Result<LoginResponse>.Success(
+            new LoginResponse
+            {
+                Status = "Authenticated",
+                AccessToken = accessToken,
+                RefreshToken = newRefreshToken,
+                ExpiresIn = 15 * 60,
+                AllowedMfaMethods = allowedMfaMethods,
+            },
+            "Tokens refreshed successfully."
+        );
     }
 }

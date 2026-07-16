@@ -58,23 +58,12 @@ public class RefreshTokenSessionRepository : IRefreshTokenSessionRepository
 
     public async Task RevokeAllByUserAsync(long userId, string reason, CancellationToken cancellationToken)
     {
-        var sessions = await _context.RefreshTokenSessions
-            .Where(x => x.UserId == userId && x.RevokedAtUtc == null)
-            .ToListAsync(cancellationToken);
-
-        if (sessions.Count == 0)
-        {
-            return;
-        }
-
         var now = DateTime.UtcNow;
-        foreach (var session in sessions)
-        {
-            session.RevokedAtUtc = now;
-            session.RevokeReason = reason;
-        }
-
-        await _context.SaveChangesAsync(cancellationToken);
+        await _context.RefreshTokenSessions
+            .Where(x => x.UserId == userId && x.RevokedAtUtc == null)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.RevokedAtUtc, now)
+                .SetProperty(x => x.RevokeReason, reason), cancellationToken);
     }
 
     public async Task<List<RefreshTokenSession>> GetActiveByUserAsync(long userId, CancellationToken cancellationToken)

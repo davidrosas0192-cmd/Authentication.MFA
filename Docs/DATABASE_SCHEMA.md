@@ -67,7 +67,7 @@ Métodos MFA habilitados por usuario (SMS, Email, FIDO2).
 | `CreatedAtUtc` | `datetime2` | NOT NULL | Fecha de creación |
 | `UpdatedAtUtc` | `datetime2` | NOT NULL | Última actualización |
 
-**Índices:** `IX_UserMfaMethods_UserId_Method` (unique), `IX_UserMfaMethods_UserId_IsEnabled`
+**Índices:** `IX_UserMfaMethods_UserId_Method` (unique), `IX_UserMfaMethods_UserId_IsEnabled`, `IX_UserMfaMethods_Method_ContactValue_Active` (filtered `WHERE IsEnabled = 1`)
 
 ---
 
@@ -138,7 +138,7 @@ Sesiones de access tokens JWT activas/revocadas.
 | `IpAddress` | `nvarchar(100)` | NULL | IP del cliente |
 | `UserAgent` | `nvarchar(500)` | NULL | User-Agent del cliente |
 
-**Índices:** `IX_AccessTokenSessions_TokenJti` (unique), `IX_AccessTokenSessions_UserId_ExpiresAtUtc`
+**Índices:** `IX_AccessTokenSessions_TokenJti` (unique), `IX_AccessTokenSessions_UserId_ExpiresAtUtc`, `IX_AccessTokenSessions_Active` (filtered `WHERE RevokedAtUtc IS NULL`)
 
 ---
 
@@ -161,7 +161,7 @@ Sesiones de refresh tokens con historial de rotación.
 | `IpAddress` | `nvarchar(100)` | NULL | IP del cliente |
 | `UserAgent` | `nvarchar(500)` | NULL | User-Agent del cliente |
 
-**Índices:** `IX_RefreshTokenSessions_TokenHash` (unique), `IX_RefreshTokenSessions_UserId_ExpiresAtUtc_RevokedAtUtc`, `IX_RefreshTokenSessions_AccessTokenSessionId`, `IX_RefreshTokenSessions_PreviousTokenSessionId`
+**Índices:** `IX_RefreshTokenSessions_TokenHash` (unique), `IX_RefreshTokenSessions_UserId_ExpiresAtUtc_RevokedAtUtc`, `IX_RefreshTokenSessions_AccessTokenSessionId`, `IX_RefreshTokenSessions_PreviousTokenSessionId`, `IX_RefreshTokenSessions_Active` (filtered `WHERE RevokedAtUtc IS NULL`)
 
 > `PreviousTokenSessionId` forma una cadena de auditoría de rotaciones. Permite reconstruir el historial completo de refresh tokens de una sesión.
 
@@ -194,7 +194,7 @@ Challenges MFA activos y completados (OTP, recovery code, FIDO2 selection).
 
 **Statuses:** `pending` → `verified` → `consumed` / `locked` / `expired` / `revoked` / `failed`
 
-**Índices:** `IX_MfaChallenges_UserId_Status_ExpiresAtUtc`, `IX_MfaChallenges_UserId_Purpose_Status_ExpiresAtUtc`, `IX_MfaChallenges_ContinuationToken`, `IX_MfaChallenges_ProviderRequestId`
+**Índices:** `IX_MfaChallenges_UserId_Status_ExpiresAtUtc`, `IX_MfaChallenges_UserId_Purpose_Status_ExpiresAtUtc`, `IX_MfaChallenges_ContinuationToken`, `IX_MfaChallenges_ProviderRequestId`, `IX_MfaChallenges_Status_CreatedAtUtc` (para cleanup)
 
 ---
 

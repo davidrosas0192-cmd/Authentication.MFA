@@ -29,5 +29,6 @@ public class SecurityAuditEventConfiguration : IEntityTypeConfiguration<Security
         builder.HasIndex(x => new { x.Outcome, x.OccurredAtUtc });
         builder.HasIndex(x => new { x.UserId, x.OccurredAtUtc });
         builder.HasIndex(x => new { x.IpAddress, x.OccurredAtUtc });
+        builder.HasIndex(x => new { x.Severity, x.OccurredAtUtc });
     }
 }

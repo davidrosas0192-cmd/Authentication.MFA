@@ -4,6 +4,8 @@ Base URL: `/api/monitor`
 
 All endpoints are public — **no authentication required**. Maximum date range is 90 days. Maximum `pageSize` is 100.
 
+> ⚠️ **Note:** These endpoints expose sensitive data (PII, audit logs, active sessions). Adding `[Authorize]` is recommended before deploying to production. See `OWASP_SECURITY_AUDIT.md`.
+
 ---
 
 ## GET /api/monitor/summary — Dashboard Summary
@@ -208,7 +210,9 @@ GET /api/monitor/challenges?status=locked
 
 ## GET /api/monitor/sessions — Token Sessions
 
-Paginated access and/or refresh token sessions.
+Paginated access and/or refresh token sessions. When `type` is not specified, returns access sessions first (paginated), then refresh sessions on subsequent pages.
+
+> **Tip:** For best performance, always specify `type=access` or `type=refresh` to query a single table.
 
 **Query Parameters**
 

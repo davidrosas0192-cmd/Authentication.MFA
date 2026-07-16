@@ -19,5 +19,8 @@ public class AccessTokenSessionConfiguration : IEntityTypeConfiguration<AccessTo
 
         builder.HasIndex(x => x.TokenJti).IsUnique();
         builder.HasIndex(x => new { x.UserId, x.ExpiresAtUtc });
+        builder.HasIndex(x => new { x.UserId, x.ExpiresAtUtc })
+               .HasFilter("[RevokedAtUtc] IS NULL")
+               .HasDatabaseName("IX_AccessTokenSessions_Active");
     }
 }

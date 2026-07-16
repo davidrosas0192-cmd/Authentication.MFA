@@ -26,5 +26,6 @@ public class AuthenticationAuditEventConfiguration : IEntityTypeConfiguration<Au
         builder.HasIndex(x => new { x.IpAddress, x.OccurredAtUtc });
         builder.HasIndex(x => new { x.Outcome, x.OccurredAtUtc });
         builder.HasIndex(x => new { x.UserId, x.OccurredAtUtc });
+        builder.HasIndex(x => new { x.Stage, x.OccurredAtUtc });
     }
 }

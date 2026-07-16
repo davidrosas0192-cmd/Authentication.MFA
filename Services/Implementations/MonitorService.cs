@@ -281,71 +281,74 @@ public class MonitorService : IMonitorService
         var now = DateTime.UtcNow;
         var normalizedType = type?.Trim().ToLowerInvariant();
 
-        var accessItems = new List<SessionItem>();
-        var refreshItems = new List<SessionItem>();
-
-        if (normalizedType is null or "access")
+        // Paginate each type separately in SQL — avoids loading all sessions into memory
+        if (normalizedType == "refresh")
         {
-            var accessQuery = _context.AccessTokenSessions.AsNoTracking();
-            if (userId.HasValue) accessQuery = accessQuery.Where(x => x.UserId == userId.Value);
-            if (onlyActive) accessQuery = accessQuery.Where(x => x.RevokedAtUtc == null && x.ExpiresAtUtc > now);
-
-            accessItems = await accessQuery
-                .Select(x => new SessionItem
-                {
-                    Id = x.Id,
-                    Type = "access",
-                    UserId = x.UserId,
-                    IssuedAtUtc = x.IssuedAtUtc,
-                    ExpiresAtUtc = x.ExpiresAtUtc,
-                    IsRevoked = x.RevokedAtUtc != null,
-                    RevokedAtUtc = x.RevokedAtUtc,
-                    RevokeReason = x.RevokeReason,
-                    IpAddress = x.IpAddress,
-                    UserAgent = x.UserAgent,
-                })
-                .ToListAsync(cancellationToken);
+            return await GetRefreshSessionsPagedAsync(userId, onlyActive, now, page, pageSize, cancellationToken);
         }
 
-        if (normalizedType is null or "refresh")
+        if (normalizedType == "access")
         {
-            var refreshQuery = _context.RefreshTokenSessions.AsNoTracking();
-            if (userId.HasValue) refreshQuery = refreshQuery.Where(x => x.UserId == userId.Value);
-            if (onlyActive) refreshQuery = refreshQuery.Where(x => x.RevokedAtUtc == null && x.ExpiresAtUtc > now);
-
-            refreshItems = await refreshQuery
-                .Select(x => new SessionItem
-                {
-                    Id = x.Id,
-                    Type = "refresh",
-                    UserId = x.UserId,
-                    IssuedAtUtc = x.IssuedAtUtc,
-                    ExpiresAtUtc = x.ExpiresAtUtc,
-                    IsRevoked = x.RevokedAtUtc != null,
-                    RevokedAtUtc = x.RevokedAtUtc,
-                    RevokeReason = x.RevokeReason,
-                    LastRotatedAtUtc = x.LastRotatedAtUtc,
-                    IpAddress = x.IpAddress,
-                    UserAgent = x.UserAgent,
-                })
-                .ToListAsync(cancellationToken);
+            return await GetAccessSessionsPagedAsync(userId, onlyActive, now, page, pageSize, cancellationToken);
         }
 
-        var allItems = accessItems
-            .Concat(refreshItems)
+        // Both types: paginate access sessions first, then refresh
+        var accessResponse = await GetAccessSessionsPagedAsync(userId, onlyActive, now, page, pageSize, cancellationToken);
+        if (accessResponse.Items.Count > 0 || page <= accessResponse.TotalPages)
+            return accessResponse;
+
+        // If past access pages, offset into refresh pages
+        var accessPages = accessResponse.TotalPages;
+        return await GetRefreshSessionsPagedAsync(userId, onlyActive, now, page - accessPages, pageSize, cancellationToken);
+    }
+
+    private async Task<PagedResponse<SessionItem>> GetAccessSessionsPagedAsync(
+        long? userId, bool onlyActive, DateTime now, int page, int pageSize, CancellationToken ct)
+    {
+        var q = _context.AccessTokenSessions.AsNoTracking();
+        if (userId.HasValue) q = q.Where(x => x.UserId == userId.Value);
+        if (onlyActive) q = q.Where(x => x.RevokedAtUtc == null && x.ExpiresAtUtc > now);
+
+        var total = await q.CountAsync(ct);
+        var items = await q
             .OrderByDescending(x => x.IssuedAtUtc)
-            .ToList();
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new SessionItem
+            {
+                Id = x.Id, Type = "access", UserId = x.UserId,
+                IssuedAtUtc = x.IssuedAtUtc, ExpiresAtUtc = x.ExpiresAtUtc,
+                IsRevoked = x.RevokedAtUtc != null, RevokedAtUtc = x.RevokedAtUtc,
+                RevokeReason = x.RevokeReason, IpAddress = x.IpAddress, UserAgent = x.UserAgent,
+            })
+            .ToListAsync(ct);
 
-        var totalCount = allItems.Count;
-        var pagedItems = allItems.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return new PagedResponse<SessionItem> { Page = page, PageSize = pageSize, TotalCount = total, Items = items };
+    }
 
-        return new PagedResponse<SessionItem>
-        {
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = totalCount,
-            Items = pagedItems,
-        };
+    private async Task<PagedResponse<SessionItem>> GetRefreshSessionsPagedAsync(
+        long? userId, bool onlyActive, DateTime now, int page, int pageSize, CancellationToken ct)
+    {
+        var q = _context.RefreshTokenSessions.AsNoTracking();
+        if (userId.HasValue) q = q.Where(x => x.UserId == userId.Value);
+        if (onlyActive) q = q.Where(x => x.RevokedAtUtc == null && x.ExpiresAtUtc > now);
+
+        var total = await q.CountAsync(ct);
+        var items = await q
+            .OrderByDescending(x => x.IssuedAtUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new SessionItem
+            {
+                Id = x.Id, Type = "refresh", UserId = x.UserId,
+                IssuedAtUtc = x.IssuedAtUtc, ExpiresAtUtc = x.ExpiresAtUtc,
+                IsRevoked = x.RevokedAtUtc != null, RevokedAtUtc = x.RevokedAtUtc,
+                RevokeReason = x.RevokeReason, LastRotatedAtUtc = x.LastRotatedAtUtc,
+                IpAddress = x.IpAddress, UserAgent = x.UserAgent,
+            })
+            .ToListAsync(ct);
+
+        return new PagedResponse<SessionItem> { Page = page, PageSize = pageSize, TotalCount = total, Items = items };
     }
 
     public async Task<PagedResponse<SecurityEventItem>> GetSecurityEventsAsync(
@@ -436,32 +439,13 @@ public class MonitorService : IMonitorService
         if (isActive.HasValue)
             userQuery = userQuery.Where(x => x.IsActive == isActive.Value);
 
-        var userIds = await userQuery.Select(x => x.Id).ToListAsync(cancellationToken);
-
-        var mfaMethods = await _context.UserMfaMethods
-            .AsNoTracking()
-            .Where(x => x.IsEnabled && userIds.Contains(x.UserId))
-            .GroupBy(x => x.UserId)
-            .Select(g => new
-            {
-                UserId = g.Key,
-                Methods = g.Select(m => m.Method).ToList(),
-            })
-            .ToListAsync(cancellationToken);
-
-        var mfaLookup = mfaMethods.ToDictionary(x => x.UserId, x => x.Methods);
-
-        if (hasMfa.HasValue)
-        {
-            var usersWithMfaIds = mfaLookup
-                .Where(kv => kv.Value.Count > 0)
-                .Select(kv => kv.Key)
-                .ToHashSet();
-
-            userQuery = hasMfa.Value
-                ? userQuery.Where(x => usersWithMfaIds.Contains(x.Id))
-                : userQuery.Where(x => !usersWithMfaIds.Contains(x.Id));
-        }
+        // Apply hasMfa filter via SQL EXISTS — avoids loading 1M ids into memory
+        if (hasMfa == true)
+            userQuery = userQuery.Where(u =>
+                _context.UserMfaMethods.Any(m => m.UserId == u.Id && m.IsEnabled));
+        else if (hasMfa == false)
+            userQuery = userQuery.Where(u =>
+                !_context.UserMfaMethods.Any(m => m.UserId == u.Id && m.IsEnabled));
 
         var totalCount = await userQuery.CountAsync(cancellationToken);
 
@@ -470,6 +454,17 @@ public class MonitorService : IMonitorService
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
+
+        // Load MFA methods only for the current page of users (max 100)
+        var pageUserIds = users.Select(u => u.Id).ToList();
+        var mfaMethodsForPage = await _context.UserMfaMethods
+            .AsNoTracking()
+            .Where(x => x.IsEnabled && pageUserIds.Contains(x.UserId))
+            .GroupBy(x => x.UserId)
+            .Select(g => new { UserId = g.Key, Methods = g.Select(m => m.Method).ToList() })
+            .ToListAsync(cancellationToken);
+
+        var mfaLookup = mfaMethodsForPage.ToDictionary(x => x.UserId, x => x.Methods);
 
         var items = users.Select(u =>
         {

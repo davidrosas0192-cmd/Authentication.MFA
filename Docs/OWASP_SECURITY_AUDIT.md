@@ -42,10 +42,10 @@ Revisión de seguridad de todos los endpoints basada en OWASP Top 10 (2021).
 
 | Endpoint | Método | Autenticación | Rate Limiting | OWASP |
 |----------|--------|:---:|:---:|-------|
-| `POST /api/mfa/enrollments` | Start Enrollment | ✅ `Bearer` | ❌ | ⚠️ Sin rate limit |
-| `PATCH /api/mfa/enrollments/current` | Verify Enrollment | ✅ `Bearer` | ❌ | ⚠️ Sin rate limit (tiene lockout 5 intentos) |
-| `POST /api/mfa/login-enrollments` | Start Login Enrollment | ✅ `EnrollToken` | ❌ | ⚠️ Sin rate limit |
-| `PATCH /api/mfa/login-enrollments/current` | Verify Login Enrollment | ✅ `EnrollToken` | ❌ | ⚠️ Sin rate limit (tiene lockout 5 intentos) |
+| `POST /api/mfa/enrollments` | Start Enrollment | ✅ `Bearer` | ✅ 3/15min/user | ✅ + unicidad de método y contactValue |
+| `PATCH /api/mfa/enrollments/current` | Verify Enrollment | ✅ `Bearer` | ✅ lockout 5 intentos | ✅ |
+| `POST /api/mfa/login-enrollments` | Start Login Enrollment | ✅ `EnrollToken` | ✅ 3/10min/user | ✅ |
+| `PATCH /api/mfa/login-enrollments/current` | Verify Login Enrollment | ✅ `EnrollToken` | ✅ lockout 5 intentos | ✅ |
 | `POST /api/mfa/login-enrollment-sessions/complete` | Complete Login Enrollment | ✅ `EnrollToken` | ❌ | ✅ |
 
 ### MFA — Management
@@ -58,16 +58,16 @@ Revisión de seguridad de todos los endpoints basada en OWASP Top 10 (2021).
 | `POST /api/mfa/management-sessions/complete` | Complete Management Session | ✅ `Bearer` | ❌ | ✅ |
 | `DELETE /api/mfa/management-sessions/{id}` | Cancel Management Session | ✅ `Bearer` | ❌ | ✅ |
 | `DELETE /api/mfa/methods/{method}` | Remove MFA Method | ✅ `Bearer` | ❌ | ✅ Step-up requerido previamente |
-| `POST /api/mfa/methods/{method}/reconfigure` | Start Reconfigure | ✅ `Bearer` | ❌ | ✅ Step-up requerido previamente |
+| `POST /api/mfa/methods/{method}/reconfigure` | Start Reconfigure | ✅ `Bearer` | ✅ 3/15min/user | ✅ Step-up + unicidad de contactValue |
 | `PATCH /api/mfa/methods/{method}/reconfigure/current` | Complete Reconfigure | ✅ `Bearer` | ❌ | ✅ lockout 5 intentos |
 
 ### FIDO2
 
 | Endpoint | Método | Autenticación | Rate Limiting | OWASP |
 |----------|--------|:---:|:---:|-------|
-| `POST /api/fido2/enrollments` | Create Enrollment Options | ✅ `Bearer` | ❌ | ⚠️ Sin rate limit |
-| `PATCH /api/fido2/enrollments/current` | Complete Enrollment | ✅ `Bearer` | ❌ | ⚠️ Sin rate limit |
-| `POST /api/fido2/authentications` | Create Login Options | ✅ `MfaToken` + DB lookup | ❌ | ✅ |
+| `POST /api/fido2/enrollments` | Create Enrollment Options | ✅ `Bearer` | ✅ 5/15min/user | ✅ + límite 2 devices |
+| `PATCH /api/fido2/enrollments/current` | Complete Enrollment | ✅ `Bearer` | ✅ 5/15min/user | ✅ |
+| `POST /api/fido2/authentications` | Create Login Options | ✅ `MfaToken` + DB lookup | ✅ 10/5min/user | ✅ |
 | `PATCH /api/fido2/authentications/current` | Complete Login | ✅ `MfaToken` + DB lookup | ❌ | ✅ |
 
 ### Users
@@ -157,15 +157,16 @@ if (!_rateLimitingService.IsAllowed(rateLimitKey, maxAttempts: 5, windowSeconds:
 
 ### ⚠️ A07:2021 — Sin rate limit en endpoints de enrollment/FIDO2
 
-Los siguientes endpoints no tienen rate limiting:
+✅ **Resuelto.** Todos los endpoints de enrollment y FIDO2 ahora tienen rate limiting:
 
-| Endpoint | Riesgo |
-|----------|--------|
-| `POST /api/mfa/enrollments` | Un atacante con token válido podría spamear el envío de OTPs (Twilio cost) |
-| `POST /api/fido2/enrollments` | Registrar múltiples credenciales FIDO2 rápidamente |
-| `POST /api/fido2/authentications` | Generar challenges FIDO2 repetidamente |
-
-**Recomendación:** Agregar rate limiting del servicio de `_rateLimitingService` en los service methods correspondientes.
+| Endpoint | Key | Límite |
+|----------|-----|--------|
+| `POST /api/mfa/enrollments` | `enrollment_otp_{userId}` | 3/15min |
+| `POST /api/mfa/login-enrollments` | `login_enrollment_{userId}` | 3/10min |
+| `POST /api/mfa/methods/{method}/reconfigure` | `reconfigure_otp_{userId}` | 3/15min |
+| `POST /api/fido2/enrollments` | `fido2_enroll_{userId}` | 5/15min |
+| `PATCH /api/fido2/enrollments/current` | `fido2_enroll_complete_{userId}` | 5/15min |
+| `POST /api/fido2/authentications` | `fido2_auth_{userId}` | 10/5min |
 
 ---
 
@@ -227,9 +228,9 @@ Los siguientes endpoints no tienen rate limiting:
 
 ## Resumen de Riesgos Priorizados
 
-| Prioridad | Endpoint / Área | OWASP | Acción |
+| Prioridad | Endpoint / Área | OWASP | Estado |
 |-----------|-----------------|-------|--------|
-| 🔴 1 | Todos `/api/monitor/*` — sin autenticación | A01 | Agregar `[Authorize]` |
-| 🔴 2 | Seed data con contraseña en texto plano | A02 | Hashear en `UserConfiguration.cs` |
-| ⚠️ 3 | `POST /api/users` — sin rate limit | A07 | Agregar rate limiting al registro |
-| ⚠️ 4 | Endpoints enrollment/FIDO2 — sin rate limit | A07 | Agregar rate limiting en services |
+| 🔴 1 | Todos `/api/monitor/*` — sin autenticación | A01 | ⚠️ **Pendiente** — agregar `[Authorize]` |
+| 🔴 2 | Seed data con contraseña en texto plano | A02 | ⚠️ **Pendiente** — hashear en `UserConfiguration.cs` |
+| ✅ 3 | Endpoints enrollment/FIDO2 — rate limiting | A07 | ✅ Implementado |
+| ✅ 4 | `POST /api/users` — sin rate limit | A07 | ✅ Implementado (ver `UserRegistrationService`) |

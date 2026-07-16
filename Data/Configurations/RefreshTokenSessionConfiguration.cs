@@ -21,5 +21,8 @@ public class RefreshTokenSessionConfiguration : IEntityTypeConfiguration<Refresh
         builder.HasIndex(x => new { x.UserId, x.ExpiresAtUtc, x.RevokedAtUtc });
         builder.HasIndex(x => x.AccessTokenSessionId);
         builder.HasIndex(x => x.PreviousTokenSessionId);
+        builder.HasIndex(x => new { x.UserId, x.ExpiresAtUtc })
+               .HasFilter("[RevokedAtUtc] IS NULL")
+               .HasDatabaseName("IX_RefreshTokenSessions_Active");
     }
 }

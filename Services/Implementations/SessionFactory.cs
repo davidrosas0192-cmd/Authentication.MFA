@@ -1,3 +1,4 @@
+using Authentication.Fido2.Data;
 using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.Entities;
 using Authentication.Fido2.Options;
@@ -11,18 +12,21 @@ public class SessionFactory : ISessionFactory
     private readonly ITokenService _tokenService;
     private readonly IAccessTokenSessionRepository _accessTokenSessionRepository;
     private readonly IRefreshTokenSessionRepository _refreshTokenSessionRepository;
+    private readonly ApplicationDbContext _context;
     private readonly JwtOptions _jwtOptions;
 
     public SessionFactory(
         ITokenService tokenService,
         IAccessTokenSessionRepository accessTokenSessionRepository,
         IRefreshTokenSessionRepository refreshTokenSessionRepository,
+        ApplicationDbContext context,
         IOptions<JwtOptions> jwtOptions
     )
     {
         _tokenService = tokenService;
         _accessTokenSessionRepository = accessTokenSessionRepository;
         _refreshTokenSessionRepository = refreshTokenSessionRepository;
+        _context = context;
         _jwtOptions = jwtOptions.Value;
     }
 
@@ -48,8 +52,6 @@ public class SessionFactory : ISessionFactory
             UserAgent = userAgent,
         };
 
-        await _accessTokenSessionRepository.AddAsync(accessSession, cancellationToken);
-
         var refreshSession = new RefreshTokenSession
         {
             Id = Guid.NewGuid(),
@@ -62,7 +64,11 @@ public class SessionFactory : ISessionFactory
             UserAgent = userAgent,
         };
 
-        await _refreshTokenSessionRepository.AddAsync(refreshSession, cancellationToken);
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        _context.AccessTokenSessions.Add(accessSession);
+        _context.RefreshTokenSessions.Add(refreshSession);
+        await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return (accessToken, refreshToken);
     }

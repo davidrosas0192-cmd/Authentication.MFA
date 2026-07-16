@@ -205,6 +205,33 @@ Authorization: Bearer <access_token>
 }
 ```
 
+**Response 409 — Method already active**
+```json
+{
+  "status": 409,
+  "title": "Conflict",
+  "detail": "MFA method 'sms' is already configured. Use reconfigure to update it."
+}
+```
+
+**Response 409 — Contact value in use by another account**
+```json
+{
+  "status": 409,
+  "title": "Conflict",
+  "detail": "This contact value is already registered with another account."
+}
+```
+
+**Response 429 — Rate limit (3 OTPs per 15 min)**
+```json
+{
+  "status": 429,
+  "title": "Too Many Requests",
+  "detail": "Too many enrollment attempts. Please try again later."
+}
+```
+
 ---
 
 ## PATCH /api/mfa/enrollments/current — Verify MFA Enrollment
@@ -541,6 +568,24 @@ Authorization: Bearer <access_token>
     "status": "pending",
     "expiresAtUtc": "2026-07-16T12:45:00Z"
   }
+}
+```
+
+**Response 409 — Contact value in use by another account**
+```json
+{
+  "status": 409,
+  "title": "Conflict",
+  "detail": "This contact value is already registered with another account."
+}
+```
+
+**Response 429 — Rate limit (3 OTPs per 15 min)**
+```json
+{
+  "status": 429,
+  "title": "Too Many Requests",
+  "detail": "Too many reconfiguration attempts. Please try again later."
 }
 ```
 

@@ -1,6 +1,8 @@
-# Plan — Unicidad de Métodos MFA por Usuario
+# Plan — Unicidad de Métodos MFA por Usuario — ✅ IMPLEMENTADO
 
 **Objetivo:** Un usuario solo puede tener un método MFA registrado por tipo (`sms`, `email`, `fido2`). No puede registrar el mismo email o teléfono en dos métodos del mismo tipo, ni registrar múltiples credenciales FIDO2.
+
+**Estado:** ✅ Completamente implementado. Build: 0 errores, 0 warnings.
 
 ---
 
@@ -18,10 +20,10 @@ Esto **ya previene duplicar el tipo a nivel de base de datos** (un usuario no pu
 
 | Escenario | Estado actual |
 |-----------|:---:|
-| Usuario intenta registrar `sms` cuando ya tiene uno activo | ⚠️ El service lo **actualiza** silenciosamente (no rechaza) |
-| Usuario intenta registrar el mismo email con `sms` y `email` por separado | ⚠️ No validado — dos métodos distintos con mismo contacto |
-| Usuario intenta registrar múltiples credenciales FIDO2 | ⚠️ `ExcludeCredentials` en las options previene hardware duplicado, pero no limita la cantidad de devices distintos |
-| Email de otro usuario usado como contactValue en `sms`/`email` | ⚠️ No validado — un usuario podría enrollar el email/tel de otro |
+| Usuario intenta registrar `sms` cuando ya tiene uno activo | ✅ Rechaza con `409 Conflict` |
+| Usuario intenta registrar el mismo email con `sms` y `email` por separado | ✅ `IsContactValueInUseAsync` lo previene |
+| Usuario intenta registrar múltiples credenciales FIDO2 | ✅ Máximo 2 por usuario, `409 Conflict` al superar |
+| Email de otro usuario usado como contactValue en `sms`/`email` | ✅ Validación global implementada |
 
 ### Código relevante — `StartEnrollmentCoreAsync` (MfaService.cs ~1383)
 

@@ -1,22 +1,23 @@
-# Plan — Rate Limiting en Enrollment y FIDO2
+# Plan — Rate Limiting en Enrollment y FIDO2 — ✅ IMPLEMENTADO
 
-**Objetivo:** Prevenir spam de OTPs de Twilio y abuso de los endpoints de enrollment y FIDO2 que actualmente no tienen rate limiting.
+**Objetivo:** Prevenir spam de OTPs de Twilio y abuso de los endpoints de enrollment y FIDO2.
+
+**Estado:** ✅ Completamente implementado. Build: 0 errores, 0 warnings.
 
 ---
 
 ## Estado Actual
 
-### Endpoints sin rate limiting
+### Endpoints con rate limiting implementado ✅
 
-| Endpoint | Riesgo |
-|----------|--------|
-| `POST /api/mfa/enrollments` | Envía OTP via Twilio en cada request → costo económico y spam SMS/email |
-| `POST /api/mfa/login-enrollments` | Mismo riesgo → Twilio OTP por cada llamada |
-| `PATCH /api/mfa/enrollments/current` | Tiene lockout de 5 intentos por challenge, pero se puede abrir nuevo challenge |
-| `POST /api/mfa/methods/{method}/reconfigure` | Envía OTP via Twilio → mismo riesgo |
-| `POST /api/fido2/enrollments` | Genera opciones + crea `Fido2Transaction` en BD en cada request |
-| `PATCH /api/fido2/enrollments/current` | Procesamiento criptográfico en cada intento |
-| `POST /api/fido2/authentications` | Genera opciones + consulta BD por credenciales |
+| Endpoint | Key | Límite | Ventana |
+|----------|-----|--------|--------|
+| `POST /api/mfa/enrollments` | `enrollment_otp_{userId}` | 3 | 15 min |
+| `POST /api/mfa/login-enrollments` | `login_enrollment_{userId}` | 3 | 10 min |
+| `POST /api/mfa/methods/{method}/reconfigure` | `reconfigure_otp_{userId}` | 3 | 15 min |
+| `POST /api/fido2/enrollments` | `fido2_enroll_{userId}` | 5 | 15 min |
+| `PATCH /api/fido2/enrollments/current` | `fido2_enroll_complete_{userId}` | 5 | 15 min |
+| `POST /api/fido2/authentications` | `fido2_auth_{userId}` | 10 | 5 min |
 
 ### ¿Qué ya existe?
 

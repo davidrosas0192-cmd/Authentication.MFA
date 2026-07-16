@@ -34,47 +34,21 @@ public class AccessTokenSessionRepository : IAccessTokenSessionRepository
     public async Task RevokeByJtiAsync(string tokenJti, string reason, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
-
-        var sessions = await _context
-            .AccessTokenSessions.Where(x => x.TokenJti == tokenJti && x.RevokedAtUtc == null && x.ExpiresAtUtc > now)
-            .ToListAsync(cancellationToken);
-
-        if (sessions.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var session in sessions)
-        {
-            session.RevokedAtUtc = now;
-            session.RevokeReason = reason;
-        }
-
-        await _context.SaveChangesAsync(cancellationToken);
+        await _context.AccessTokenSessions
+            .Where(x => x.TokenJti == tokenJti && x.RevokedAtUtc == null && x.ExpiresAtUtc > now)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.RevokedAtUtc, now)
+                .SetProperty(x => x.RevokeReason, reason), cancellationToken);
     }
 
     public async Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
-
-        var sessions = await _context
-            .AccessTokenSessions.Where(
-                x => x.UserId == userId && x.RevokedAtUtc == null && x.ExpiresAtUtc > now
-            )
-            .ToListAsync(cancellationToken);
-
-        if (sessions.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var session in sessions)
-        {
-            session.RevokedAtUtc = now;
-            session.RevokeReason = reason;
-        }
-
-        await _context.SaveChangesAsync(cancellationToken);
+        await _context.AccessTokenSessions
+            .Where(x => x.UserId == userId && x.RevokedAtUtc == null && x.ExpiresAtUtc > now)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.RevokedAtUtc, now)
+                .SetProperty(x => x.RevokeReason, reason), cancellationToken);
     }
 
     public async Task<int> DeleteRevokedSessionsAsync(DateTime olderThanUtc, CancellationToken cancellationToken)

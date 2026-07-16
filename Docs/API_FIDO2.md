@@ -53,6 +53,24 @@ Authorization: Bearer <access_token>
 }
 ```
 
+**Response 409 — Maximum 2 FIDO2 devices reached**
+```json
+{
+  "status": 409,
+  "title": "Conflict",
+  "detail": "Maximum number of FIDO2 devices (2) reached. Remove an existing device before adding a new one."
+}
+```
+
+**Response 429 — Rate limit (5 per 15 min)**
+```json
+{
+  "status": 429,
+  "title": "Too Many Requests",
+  "detail": "Too many FIDO2 enrollment attempts. Please try again later."
+}
+```
+
 ---
 
 ## PATCH /api/fido2/enrollments/current — Complete FIDO2 Enrollment

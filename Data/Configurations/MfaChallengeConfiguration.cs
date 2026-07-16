@@ -28,5 +28,6 @@ public class MfaChallengeConfiguration : IEntityTypeConfiguration<MfaChallenge>
         builder.HasIndex(x => new { x.UserId, x.Purpose, x.Status, x.ExpiresAtUtc });
         builder.HasIndex(x => x.ContinuationToken);
         builder.HasIndex(x => x.ProviderRequestId);
+        builder.HasIndex(x => new { x.Status, x.CreatedAtUtc });
     }
 }

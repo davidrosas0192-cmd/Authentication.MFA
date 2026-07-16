@@ -2,6 +2,7 @@ using Authentication.Fido2.Services.Interfaces;
 using Authentication.Fido2.Services.Implementations;
 using Authentication.Fido2.Data.Repositories.Interfaces;
 using Authentication.Fido2.Data.Repositories.Implementations;
+using Authentication.Fido2.Filters;
 using Authentication.Fido2.Options;
 
 namespace Authentication.Fido2.Extensions;
@@ -38,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMfaManagementSessionRepository, MfaManagementSessionRepository>();
         services.AddScoped<IUserRecoveryCodeRepository, UserRecoveryCodeRepository>();
         services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<ISessionFactory, SessionFactory>();
         services.AddSingleton<IRateLimitingService, RateLimitingService>();
         services.AddSingleton<IDistributedLockService, DistributedLockService>();
         services.AddScoped<IMonitorService, MonitorService>();

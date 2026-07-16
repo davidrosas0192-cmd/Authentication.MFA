@@ -17,6 +17,7 @@ public class AuthService : IAuthService
     private readonly IMfaLoginEnrollmentSessionRepository _mfaLoginEnrollmentSessionRepository;
     private readonly IRefreshTokenSessionRepository _refreshTokenSessionRepository;
     private readonly IRateLimitingService _rateLimitingService;
+    private readonly ISessionFactory _sessionFactory;
     private readonly IAuditService _auditService;
     private readonly IMfaService _mfaService;
     private readonly JwtOptions _jwtOptions;
@@ -30,6 +31,7 @@ public class AuthService : IAuthService
         IMfaLoginEnrollmentSessionRepository mfaLoginEnrollmentSessionRepository,
         IRefreshTokenSessionRepository refreshTokenSessionRepository,
         IRateLimitingService rateLimitingService,
+        ISessionFactory sessionFactory,
         IAuditService auditService,
         IMfaService mfaService,
         IOptions<JwtOptions> jwtOptions,
@@ -52,6 +54,7 @@ public class AuthService : IAuthService
             ?? throw new ArgumentNullException(nameof(refreshTokenSessionRepository));
         _rateLimitingService =
             rateLimitingService ?? throw new ArgumentNullException(nameof(rateLimitingService));
+        _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
         _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
         _mfaService = mfaService ?? throw new ArgumentNullException(nameof(mfaService));
         _jwtOptions = jwtOptions.Value;
@@ -293,37 +296,12 @@ public class AuthService : IAuthService
             cancellationToken
         );
 
-        var accessTokenJti = Guid.NewGuid().ToString("N");
-        var accessToken = _tokenService.CreateAccessToken(user, accessTokenJti);
-        var refreshToken = _tokenService.CreateRefreshToken();
-
-        var accessTokenSession = new Entities.AccessTokenSession
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            TokenJti = accessTokenJti,
-            IssuedAtUtc = DateTime.UtcNow,
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
-            IpAddress = ipAddress,
-            UserAgent = userAgent,
-        };
-
-        await _accessTokenSessionRepository.AddAsync(accessTokenSession, cancellationToken);
-
-        // Create refresh token session (5 days validity)
-        var refreshTokenSession = new Entities.RefreshTokenSession
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            TokenHash = _tokenService.HashRefreshToken(refreshToken),
-            AccessTokenSessionId = accessTokenSession.Id,
-            IssuedAtUtc = DateTime.UtcNow,
-            ExpiresAtUtc = DateTime.UtcNow.AddDays(5),
-            IpAddress = ipAddress,
-            UserAgent = userAgent,
-        };
-
-        await _refreshTokenSessionRepository.AddAsync(refreshTokenSession, cancellationToken);
+        var (accessToken, refreshToken) = await _sessionFactory.CreateAuthenticatedSessionAsync(
+            user,
+            ipAddress,
+            userAgent,
+            cancellationToken
+        );
 
         return Result<LoginResponse>.Success(
             new LoginResponse

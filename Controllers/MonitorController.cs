@@ -6,7 +6,7 @@ namespace Authentication.Fido2.Controllers;
 
 [ApiController]
 [AllowAnonymous]
-public class MonitorController : ControllerBase
+public class MonitorController : ApiControllerBase
 {
     private readonly IMonitorService _monitorService;
 

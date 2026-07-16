@@ -1,11 +1,15 @@
 using Authentication.Fido2.Data;
 using Authentication.Fido2.Extensions;
+using Authentication.Fido2.Filters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<GlobalExceptionFilter>();
+});
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {

@@ -26,6 +26,7 @@ public class Fido2MfaService : IFido2MfaService
     private readonly IMfaService _mfaService;
     private readonly IAccessTokenSessionRepository _accessTokenSessionRepository;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
+    private readonly ISessionFactory _sessionFactory;
     private readonly IAuditService _auditService;
     private readonly JwtOptions _jwtOptions;
 
@@ -40,6 +41,7 @@ public class Fido2MfaService : IFido2MfaService
         IMfaService mfaService,
         IAccessTokenSessionRepository accessTokenSessionRepository,
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
+        ISessionFactory sessionFactory,
         IAuditService auditService,
         IOptions<JwtOptions> jwtOptions
     )
@@ -64,6 +66,7 @@ public class Fido2MfaService : IFido2MfaService
         _mfaTempTokenSessionRepository =
             mfaTempTokenSessionRepository
             ?? throw new ArgumentNullException(nameof(mfaTempTokenSessionRepository));
+        _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
         _auditService = auditService ?? throw new ArgumentNullException(nameof(auditService));
         _jwtOptions = jwtOptions.Value;
     }
@@ -152,7 +155,7 @@ public class Fido2MfaService : IFido2MfaService
             IpAddress = ipAddress,
             UserAgent = userAgent,
             CreatedAtUtc = DateTime.UtcNow,
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
         };
 
         await _transactionRepository.AddAsync(transaction, cancellationToken);
@@ -435,7 +438,7 @@ public class Fido2MfaService : IFido2MfaService
             IpAddress = ipAddress,
             UserAgent = userAgent,
             CreatedAtUtc = DateTime.UtcNow,
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
             ParentMfaTransactionId = mfaTransactionId,
         };
 
@@ -629,19 +632,10 @@ public class Fido2MfaService : IFido2MfaService
             cancellationToken
         );
 
-        var accessTokenJti = Guid.NewGuid().ToString("N");
-        var accessToken = _tokenService.CreateAccessToken(user, accessTokenJti);
-        var refreshToken = _tokenService.CreateRefreshToken();
-
-        await _accessTokenSessionRepository.AddAsync(
-            new AccessTokenSession
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                TokenJti = accessTokenJti,
-                IssuedAtUtc = DateTime.UtcNow,
-                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
-            },
+        var (accessToken, refreshToken) = await _sessionFactory.CreateAuthenticatedSessionAsync(
+            user,
+            null,
+            null,
             cancellationToken
         );
 
@@ -742,22 +736,7 @@ public class Fido2MfaService : IFido2MfaService
         return recoveryCodes;
     }
 
-    private static string GenerateRecoveryCode(string alphabet)
-    {
-        const int codeLength = 12;
-        var chars = new char[codeLength];
+    private static string GenerateRecoveryCode(string alphabet) => RecoveryCodeHelper.Generate();
 
-        for (var index = 0; index < codeLength; index++)
-        {
-            chars[index] = alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)];
-        }
-
-        var value = new string(chars);
-        return $"{value[..4]}-{value.Substring(4, 4)}-{value.Substring(8, 4)}";
-    }
-
-    private static string NormalizeRecoveryCode(string requestedCode)
-    {
-        return requestedCode.Trim().Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
-    }
+    private static string NormalizeRecoveryCode(string requestedCode) => RecoveryCodeHelper.Normalize(requestedCode);
 }

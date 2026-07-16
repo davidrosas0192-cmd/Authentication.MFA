@@ -29,6 +29,7 @@ public class MfaService : IMfaService
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
     private readonly IRateLimitingService _rateLimitingService;
     private readonly IDistributedLockService _distributedLockService;
+    private readonly ISessionFactory _sessionFactory;
     private readonly IAuditService _auditService;
     private readonly JwtOptions _jwtOptions;
 
@@ -45,6 +46,7 @@ public class MfaService : IMfaService
         IMfaTempTokenSessionRepository mfaTempTokenSessionRepository,
         IRateLimitingService rateLimitingService,
         IDistributedLockService distributedLockService,
+        ISessionFactory sessionFactory,
         IAuditService auditService,
         IOptions<JwtOptions> jwtOptions
     )
@@ -61,6 +63,7 @@ public class MfaService : IMfaService
         _mfaTempTokenSessionRepository = mfaTempTokenSessionRepository;
         _rateLimitingService = rateLimitingService;
         _distributedLockService = distributedLockService;
+        _sessionFactory = sessionFactory;
         _auditService = auditService;
         _jwtOptions = jwtOptions.Value;
     }
@@ -122,7 +125,7 @@ public class MfaService : IMfaService
             ContinuationToken = CreateContinuationToken(),
             StepVersion = 1,
             TokenJti = tokenJti,
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
             CreatedAtUtc = DateTime.UtcNow,
             UpdatedAtUtc = DateTime.UtcNow,
         };
@@ -176,7 +179,7 @@ public class MfaService : IMfaService
             Status = MfaManagementSessionStatuses.StepUpRequired,
             ContinuationToken = CreateContinuationToken(),
             StepVersion = 1,
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
             CreatedAtUtc = DateTime.UtcNow,
             UpdatedAtUtc = DateTime.UtcNow,
         };
@@ -267,7 +270,7 @@ public class MfaService : IMfaService
             Purpose = MfaChallengePurposes.ManageMfa,
             Method = normalizedMethod,
             Status = MfaChallengeStatuses.Pending,
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
             IpAddress = ipAddress,
             UserAgent = userAgent,
             CreatedAtUtc = DateTime.UtcNow,
@@ -362,7 +365,7 @@ public class MfaService : IMfaService
             ContinuationToken = CreateContinuationToken(),
             StepVersion = 1,
             Status = MfaChallengeStatuses.PendingSelection,
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
             IpAddress = ipAddress,
             UserAgent = userAgent,
             CreatedAtUtc = DateTime.UtcNow,
@@ -456,7 +459,7 @@ public class MfaService : IMfaService
             challenge.Status = MfaChallengeStatuses.Pending;
             challenge.ContinuationToken = CreateContinuationToken();
             challenge.StepVersion += 1;
-            challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5);
+            challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes);
             challenge.IpAddress = ipAddress ?? challenge.IpAddress;
             challenge.UserAgent = userAgent ?? challenge.UserAgent;
 
@@ -504,7 +507,7 @@ public class MfaService : IMfaService
             challenge.Status = MfaChallengeStatuses.Pending;
             challenge.ContinuationToken = CreateContinuationToken();
             challenge.StepVersion += 1;
-            challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5);
+            challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes);
             challenge.IpAddress = ipAddress ?? challenge.IpAddress;
             challenge.UserAgent = userAgent ?? challenge.UserAgent;
 
@@ -561,7 +564,7 @@ public class MfaService : IMfaService
         challenge.Status = MfaChallengeStatuses.Pending;
         challenge.ContinuationToken = CreateContinuationToken();
         challenge.StepVersion += 1;
-        challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5);
+        challenge.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes);
         challenge.IpAddress = ipAddress ?? challenge.IpAddress;
         challenge.UserAgent = userAgent ?? challenge.UserAgent;
 
@@ -701,7 +704,33 @@ public class MfaService : IMfaService
 
         if (!isApproved)
         {
-            challenge.Status = MfaChallengeStatuses.Failed;
+            challenge.FailedAttempts++;
+            challenge.LastFailedAttemptAtUtc = DateTime.UtcNow;
+
+            if (challenge.FailedAttempts >= MfaChallengeOptions.MaxFailedAttempts)
+            {
+                challenge.Status = MfaChallengeStatuses.Locked;
+                await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+                await _auditService.TrackSecurityEventAsync(
+                    "Authentication",
+                    "auth.mfa.management_session.stepup.failed",
+                    "Warning",
+                    false,
+                    userId,
+                    null,
+                    $"Maximum failed attempts ({MfaChallengeOptions.MaxFailedAttempts}) exceeded",
+                    null,
+                    cancellationToken
+                );
+
+                return Result<VerifyMfaManagementChallengeResponse>.Failure(
+                    "Too many failed verification attempts. Please try again later.",
+                    StatusCodes.Status429TooManyRequests
+                );
+            }
+
+            challenge.Status = MfaChallengeStatuses.Pending;
             await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
 
             await _auditService.TrackSecurityEventAsync(
@@ -1226,19 +1255,10 @@ public class MfaService : IMfaService
             cancellationToken
         );
 
-        var accessTokenJti = Guid.NewGuid().ToString("N");
-        var accessToken = _tokenService.CreateAccessToken(user, accessTokenJti);
-        var refreshToken = _tokenService.CreateRefreshToken();
-
-        await _accessTokenSessionRepository.AddAsync(
-            new AccessTokenSession
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                TokenJti = accessTokenJti,
-                IssuedAtUtc = DateTime.UtcNow,
-                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
-            },
+        var (accessToken, refreshToken) = await _sessionFactory.CreateAuthenticatedSessionAsync(
+            user,
+            challenge.IpAddress,
+            challenge.UserAgent,
             cancellationToken
         );
 
@@ -1405,7 +1425,7 @@ public class MfaService : IMfaService
             Channel = normalizedMethod,
             ContactValue = contact,
             Status = MfaChallengeStatuses.Pending,
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
             IpAddress = ipAddress,
             UserAgent = userAgent,
             CreatedAtUtc = DateTime.UtcNow,
@@ -1600,21 +1620,10 @@ public class MfaService : IMfaService
         session.UpdatedAtUtc = DateTime.UtcNow;
         await _mfaLoginEnrollmentSessionRepository.UpdateAsync(session, cancellationToken);
 
-        var accessTokenJti = Guid.NewGuid().ToString("N");
-        var accessToken = _tokenService.CreateAccessToken(user, accessTokenJti);
-        var refreshToken = _tokenService.CreateRefreshToken();
-
-        await _accessTokenSessionRepository.AddAsync(
-            new AccessTokenSession
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                TokenJti = accessTokenJti,
-                IssuedAtUtc = DateTime.UtcNow,
-                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
-                IpAddress = ipAddress,
-                UserAgent = userAgent,
-            },
+        var (accessToken, refreshToken) = await _sessionFactory.CreateAuthenticatedSessionAsync(
+            user,
+            ipAddress,
+            userAgent,
             cancellationToken
         );
 
@@ -1710,7 +1719,31 @@ public class MfaService : IMfaService
 
         if (!isApproved)
         {
-            challenge.Status = MfaChallengeStatuses.Failed;
+            challenge.FailedAttempts++;
+            challenge.LastFailedAttemptAtUtc = DateTime.UtcNow;
+
+            if (challenge.FailedAttempts >= MfaChallengeOptions.MaxFailedAttempts)
+            {
+                challenge.Status = MfaChallengeStatuses.Locked;
+                await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+                await _auditService.TrackAuthenticationEventAsync(
+                    userId,
+                    null,
+                    "mfa_enrollment_verify",
+                    challenge.Method,
+                    false,
+                    $"Maximum failed attempts ({MfaChallengeOptions.MaxFailedAttempts}) exceeded",
+                    cancellationToken
+                );
+
+                return Result<VerifyMfaEnrollmentResponse>.Failure(
+                    "Too many failed verification attempts. Please try again later.",
+                    StatusCodes.Status429TooManyRequests
+                );
+            }
+
+            challenge.Status = MfaChallengeStatuses.Pending;
             await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
 
             await _auditService.TrackAuthenticationEventAsync(
@@ -1964,7 +1997,7 @@ public class MfaService : IMfaService
             Channel = normalizedMethod,
             ContactValue = contact,
             Status = MfaChallengeStatuses.Pending,
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
             IpAddress = ipAddress,
             UserAgent = userAgent,
             CreatedAtUtc = DateTime.UtcNow,
@@ -2070,7 +2103,33 @@ public class MfaService : IMfaService
 
         if (!isApproved)
         {
-            challenge.Status = MfaChallengeStatuses.Failed;
+            challenge.FailedAttempts++;
+            challenge.LastFailedAttemptAtUtc = DateTime.UtcNow;
+
+            if (challenge.FailedAttempts >= MfaChallengeOptions.MaxFailedAttempts)
+            {
+                challenge.Status = MfaChallengeStatuses.Locked;
+                await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
+
+                await _auditService.TrackSecurityEventAsync(
+                    "Authentication",
+                    "auth.mfa.method.reconfigure.fail",
+                    "Warning",
+                    false,
+                    userId,
+                    null,
+                    $"Maximum failed attempts ({MfaChallengeOptions.MaxFailedAttempts}) exceeded",
+                    new { method = normalizedMethod },
+                    cancellationToken
+                );
+
+                return Result<CompleteMfaReconfigureResponse>.Failure(
+                    "Too many failed verification attempts. Please try again later.",
+                    StatusCodes.Status429TooManyRequests
+                );
+            }
+
+            challenge.Status = MfaChallengeStatuses.Pending;
             await _mfaChallengeRepository.UpdateAsync(challenge, cancellationToken);
 
             await _auditService.TrackSecurityEventAsync(
@@ -2186,24 +2245,9 @@ public class MfaService : IMfaService
         return plainCodes;
     }
 
-    private static string GenerateRecoveryCode()
-    {
-        var chars = new char[RecoveryCodeLength];
+    private static string GenerateRecoveryCode() => RecoveryCodeHelper.Generate();
 
-        for (var index = 0; index < RecoveryCodeLength; index++)
-        {
-            var alphabetIndex = RandomNumberGenerator.GetInt32(RecoveryCodeAlphabet.Length);
-            chars[index] = RecoveryCodeAlphabet[alphabetIndex];
-        }
-
-        var value = new string(chars);
-        return $"{value[..4]}-{value.Substring(4, 4)}-{value.Substring(8, 4)}";
-    }
-
-    private static string NormalizeRecoveryCode(string requestedCode)
-    {
-        return requestedCode.Trim().Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
-    }
+    private static string NormalizeRecoveryCode(string requestedCode) => RecoveryCodeHelper.Normalize(requestedCode);
 
     private Task<bool> HasRecentManagementStepUpAsync(long userId, CancellationToken cancellationToken)
     {

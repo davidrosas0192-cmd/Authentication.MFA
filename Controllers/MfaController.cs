@@ -16,7 +16,7 @@ namespace Authentication.Fido2.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class MfaController : ControllerBase
+public class MfaController : ApiControllerBase
 {
     private readonly IMfaService _mfaService;
     private readonly IMfaLoginEnrollmentSessionRepository _mfaLoginEnrollmentSessionRepository;
@@ -61,163 +61,134 @@ public class MfaController : ControllerBase
     {
     }
 
+    protected override int RetryAfterSeconds =>
+        Math.Max(1, _mfaApiPolicyOptions.RetryAfterSecondsOnTooManyRequests);
+
     [Authorize]
     [HttpGet("methods")]
     public async Task<IActionResult> GetMethods(CancellationToken cancellationToken)
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                await _auditService.TrackSecurityEventAsync(
-                    "Authentication",
-                    "auth.mfa.methods.read",
-                    "Warning",
-                    false,
-                    null,
-                    null,
-                    "Invalid token",
-                    null,
-                    cancellationToken
-                );
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var methods = await _mfaService.GetAllowedMethodsAsync(userId, cancellationToken);
-
             await _auditService.TrackSecurityEventAsync(
                 "Authentication",
                 "auth.mfa.methods.read",
-                "Information",
-                true,
-                userId,
+                "Warning",
+                false,
                 null,
                 null,
-                new { allowedCount = methods.Count },
+                "Invalid token",
+                null,
                 cancellationToken
             );
+            return UnauthorizedProblem("Invalid token.");
+        }
 
-            return ToActionResult(
-                Result<MfaMethodsResponse>.Success(new MfaMethodsResponse { AllowedMfaMethods = methods })
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred getting MFA methods.");
-            return Problem("An error occurred while retrieving MFA methods.");
-        }
+        var methods = await _mfaService.GetAllowedMethodsAsync(userId, cancellationToken);
+
+        await _auditService.TrackSecurityEventAsync(
+            "Authentication",
+            "auth.mfa.methods.read",
+            "Information",
+            true,
+            userId,
+            null,
+            null,
+            new { allowedCount = methods.Count },
+            cancellationToken
+        );
+
+        return ToActionResult(
+            Result<MfaMethodsResponse>.Success(new MfaMethodsResponse { AllowedMfaMethods = methods })
+        );
     }
 
     [Authorize]
     [HttpGet("setup-options")]
     public async Task<IActionResult> GetDevicesAvailable(CancellationToken cancellationToken)
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                await _auditService.TrackSecurityEventAsync(
-                    "Authentication",
-                    "auth.mfa.devices.available",
-                    "Warning",
-                    false,
-                    null,
-                    null,
-                    "Invalid token",
-                    null,
-                    cancellationToken
-                );
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var allowedMethods = await _mfaService.GetAllowedMethodsAsync(userId, cancellationToken);
-            var availableSetupOptions = await _mfaService.GetAvailableSetupMethodsAsync(
-                userId,
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.mfa.devices.available",
+                "Warning",
+                false,
+                null,
+                null,
+                "Invalid token",
+                null,
                 cancellationToken
             );
+            return UnauthorizedProblem("Invalid token.");
+        }
 
-            return ToActionResult(
-                Result<MfaDevicesAvailableResponse>.Success(
-                    new MfaDevicesAvailableResponse
-                    {
-                        AllowedMfaMethods = allowedMethods,
-                        AvailableMfaSetupOptions = availableSetupOptions,
-                    }
-                )
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred getting MFA devices available.");
-            return Problem("An error occurred while retrieving MFA devices available.");
-        }
+        var allowedMethods = await _mfaService.GetAllowedMethodsAsync(userId, cancellationToken);
+        var availableSetupOptions = await _mfaService.GetAvailableSetupMethodsAsync(
+            userId,
+            cancellationToken
+        );
+
+        return ToActionResult(
+            Result<MfaDevicesAvailableResponse>.Success(
+                new MfaDevicesAvailableResponse
+                {
+                    AllowedMfaMethods = allowedMethods,
+                    AvailableMfaSetupOptions = availableSetupOptions,
+                }
+            )
+        );
     }
 
     [HttpPost("challenges")]
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
     public async Task<IActionResult> StartChallenge(        [FromBody] StartMfaChallengeRequest request,        CancellationToken cancellationToken    )
     {
-        try
+        var mfaContextResult = await ValidateMfaTokenContext(cancellationToken);
+        if (mfaContextResult.ErrorResult is not null)
         {
-            var mfaContextResult = await ValidateMfaTokenContext(cancellationToken);
-            if (mfaContextResult.ErrorResult is not null)
-            {
-                return mfaContextResult.ErrorResult;
-            }
-
-            var response = await _mfaService.StartChallengeAsync(
-                mfaContextResult.UserId,
-                mfaContextResult.MfaTransactionId,
-                request.Method,
-                HttpContext.Connection.RemoteIpAddress?.ToString(),
-                Request.Headers.UserAgent.ToString(),
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return mfaContextResult.ErrorResult;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred starting MFA challenge.");
-            return Problem("An error occurred while starting MFA challenge.");
-        }
+
+        var response = await _mfaService.StartChallengeAsync(
+            mfaContextResult.UserId,
+            mfaContextResult.MfaTransactionId,
+            request.Method,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [HttpPatch("challenges/current")]
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
     public async Task<IActionResult> VerifyChallenge(        [FromBody] VerifyMfaChallengeRequest request,        CancellationToken cancellationToken    )
     {
-        try
+        var mfaContextResult = await ValidateMfaTokenContext(cancellationToken);
+        if (mfaContextResult.ErrorResult is not null)
         {
-            var mfaContextResult = await ValidateMfaTokenContext(cancellationToken);
-            if (mfaContextResult.ErrorResult is not null)
-            {
-                return mfaContextResult.ErrorResult;
-            }
+            return mfaContextResult.ErrorResult;
+        }
 
-            var response = await _mfaService.VerifyChallengeAsync(
-                mfaContextResult.UserId,
+        var response = await _mfaService.VerifyChallengeAsync(
+            mfaContextResult.UserId,
+            mfaContextResult.MfaTransactionId,
+            request.ContinuationToken,
+            request.Code,
+            cancellationToken
+        );
+
+        if (response.IsSuccess)
+        {
+            await _mfaTempTokenSessionRepository.ConsumeByTransactionAsync(
                 mfaContextResult.MfaTransactionId,
-                request.ContinuationToken,
-                request.Code,
                 cancellationToken
             );
-
-            if (response.IsSuccess)
-            {
-                await _mfaTempTokenSessionRepository.ConsumeByTransactionAsync(
-                    mfaContextResult.MfaTransactionId,
-                    cancellationToken
-                );
-            }
-
-            return ToActionResult(response);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred verifying MFA challenge.");
-            return Problem("An error occurred while verifying MFA challenge.");
-        }
+
+        return ToActionResult(response);
     }
 
     [Authorize]
@@ -227,58 +198,42 @@ public class MfaController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var response = await _mfaService.StartEnrollmentAsync(
-                userId,
-                request,
-                HttpContext.Connection.RemoteIpAddress?.ToString(),
-                Request.Headers.UserAgent.ToString(),
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred starting MFA enrollment.");
-            return Problem("An error occurred while starting MFA enrollment.");
-        }
+
+        var response = await _mfaService.StartEnrollmentAsync(
+            userId,
+            request,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.LoginEnrollmentScheme)]
     [HttpPost("login-enrollments")]
     public async Task<IActionResult> StartLoginEnrollment(        [FromBody] StartLoginEnrollmentRequest request,        CancellationToken cancellationToken    )
     {
-        try
+        var enrollmentContextResult = await ValidateLoginEnrollmentTokenContext(cancellationToken);
+        if (enrollmentContextResult.ErrorResult is not null)
         {
-            var enrollmentContextResult = await ValidateLoginEnrollmentTokenContext(cancellationToken);
-            if (enrollmentContextResult.ErrorResult is not null)
-            {
-                return enrollmentContextResult.ErrorResult;
-            }
-
-            var response = await _mfaService.StartLoginEnrollmentAsync(
-                enrollmentContextResult.UserId,
-                enrollmentContextResult.EnrollmentSessionId,
-                request,
-                HttpContext.Connection.RemoteIpAddress?.ToString(),
-                Request.Headers.UserAgent.ToString(),
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return enrollmentContextResult.ErrorResult;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred starting login-time MFA enrollment.");
-            return Problem("An error occurred while starting login-time MFA enrollment.");
-        }
+
+        var response = await _mfaService.StartLoginEnrollmentAsync(
+            enrollmentContextResult.UserId,
+            enrollmentContextResult.EnrollmentSessionId,
+            request,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.LoginEnrollmentScheme)]
@@ -288,58 +243,42 @@ public class MfaController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        var enrollmentContextResult = await ValidateLoginEnrollmentTokenContext(cancellationToken);
+        if (enrollmentContextResult.ErrorResult is not null)
         {
-            var enrollmentContextResult = await ValidateLoginEnrollmentTokenContext(cancellationToken);
-            if (enrollmentContextResult.ErrorResult is not null)
-            {
-                return enrollmentContextResult.ErrorResult;
-            }
-
-            var response = await _mfaService.VerifyLoginEnrollmentAsync(
-                enrollmentContextResult.UserId,
-                enrollmentContextResult.EnrollmentSessionId,
-                request,
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return enrollmentContextResult.ErrorResult;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred verifying login-time MFA enrollment.");
-            return Problem("An error occurred while verifying login-time MFA enrollment.");
-        }
+
+        var response = await _mfaService.VerifyLoginEnrollmentAsync(
+            enrollmentContextResult.UserId,
+            enrollmentContextResult.EnrollmentSessionId,
+            request,
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.LoginEnrollmentScheme)]
     [HttpPost("login-enrollment-sessions/complete")]
     public async Task<IActionResult> CompleteLoginEnrollmentSession(        [FromBody] CompleteLoginEnrollmentSessionRequest request,        CancellationToken cancellationToken    )
     {
-        try
+        var enrollmentContextResult = await ValidateLoginEnrollmentTokenContext(cancellationToken);
+        if (enrollmentContextResult.ErrorResult is not null)
         {
-            var enrollmentContextResult = await ValidateLoginEnrollmentTokenContext(cancellationToken);
-            if (enrollmentContextResult.ErrorResult is not null)
-            {
-                return enrollmentContextResult.ErrorResult;
-            }
-
-            var response = await _mfaService.CompleteLoginEnrollmentSessionAsync(
-                enrollmentContextResult.UserId,
-                request.EnrollmentSessionId,
-                request.ContinuationToken,
-                HttpContext.Connection.RemoteIpAddress?.ToString(),
-                Request.Headers.UserAgent.ToString(),
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return enrollmentContextResult.ErrorResult;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred completing login-time MFA enrollment.");
-            return Problem("An error occurred while completing login-time MFA enrollment.");
-        }
+
+        var response = await _mfaService.CompleteLoginEnrollmentSessionAsync(
+            enrollmentContextResult.UserId,
+            request.EnrollmentSessionId,
+            request.ContinuationToken,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize]
@@ -349,83 +288,59 @@ public class MfaController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var response = await _mfaService.VerifyEnrollmentAsync(
-                userId,
-                request,
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred verifying MFA enrollment.");
-            return Problem("An error occurred while verifying MFA enrollment.");
-        }
+
+        var response = await _mfaService.VerifyEnrollmentAsync(
+            userId,
+            request,
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize]
     [HttpPost("management-sessions")]
     public async Task<IActionResult> StartManagementSession(CancellationToken cancellationToken)
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var response = await _mfaService.StartManagementSessionAsync(
-                userId,
-                HttpContext.Connection.RemoteIpAddress?.ToString(),
-                Request.Headers.UserAgent.ToString(),
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred starting MFA management session.");
-            return Problem("An error occurred while starting MFA management session.");
-        }
+
+        var response = await _mfaService.StartManagementSessionAsync(
+            userId,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize]
     [HttpPost("management-sessions/challenges/start")]
     public async Task<IActionResult> StartManagementChallenge(        [FromBody] StartMfaManagementChallengeRequest request,        CancellationToken cancellationToken    )
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var response = await _mfaService.StartManagementChallengeAsync(
-                userId,
-                request.MfaTransactionId,
-                request.ContinuationToken,
-                request.Method,
-                HttpContext.Connection.RemoteIpAddress?.ToString(),
-                Request.Headers.UserAgent.ToString(),
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred starting MFA management challenge.");
-            return Problem("An error occurred while starting MFA management challenge.");
-        }
+
+        var response = await _mfaService.StartManagementChallengeAsync(
+            userId,
+            request.MfaTransactionId,
+            request.ContinuationToken,
+            request.Method,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize]
@@ -435,28 +350,20 @@ public class MfaController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var response = await _mfaService.VerifyManagementChallengeAsync(
-                userId,
-                request.MfaTransactionId,
-                request.ContinuationToken,
-                request.Code,
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred verifying MFA management challenge.");
-            return Problem("An error occurred while verifying MFA management challenge.");
-        }
+
+        var response = await _mfaService.VerifyManagementChallengeAsync(
+            userId,
+            request.MfaTransactionId,
+            request.ContinuationToken,
+            request.Code,
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize]
@@ -466,27 +373,19 @@ public class MfaController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var response = await _mfaService.CompleteManagementSessionAsync(
-                userId,
-                request.MfaTransactionId,
-                request.ContinuationToken,
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred completing MFA management session.");
-            return Problem("An error occurred while completing MFA management session.");
-        }
+
+        var response = await _mfaService.CompleteManagementSessionAsync(
+            userId,
+            request.MfaTransactionId,
+            request.ContinuationToken,
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize]
@@ -496,47 +395,31 @@ public class MfaController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var response = await _mfaService.CancelManagementSessionAsync(
-                userId,
-                mfaTransactionId,
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred cancelling MFA management session.");
-            return Problem("An error occurred while cancelling MFA management session.");
-        }
+
+        var response = await _mfaService.CancelManagementSessionAsync(
+            userId,
+            mfaTransactionId,
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize]
     [HttpDelete("methods/{method}")]
     public async Task<IActionResult> RemoveMethod(string method, CancellationToken cancellationToken)
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
+            return UnauthorizedProblem("Invalid token.");
+        }
 
-            var response = await _mfaService.RemoveMethodAsync(userId, method, cancellationToken);
-            return ToActionResult(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred removing MFA method {Method}.", method);
-            return Problem("An error occurred while removing MFA method.");
-        }
+        var response = await _mfaService.RemoveMethodAsync(userId, method, cancellationToken);
+        return ToActionResult(response);
     }
 
     [Authorize]
@@ -547,28 +430,20 @@ public class MfaController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
+            return UnauthorizedProblem("Invalid token.");
+        }
 
-            var response = await _mfaService.StartReconfigureMethodAsync(
-                userId,
-                method,
-                request,
-                HttpContext.Connection.RemoteIpAddress?.ToString(),
-                Request.Headers.UserAgent.ToString(),
-                cancellationToken
-            );
-            return ToActionResult(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred starting MFA method reconfiguration for {Method}.", method);
-            return Problem("An error occurred while starting MFA method reconfiguration.");
-        }
+        var response = await _mfaService.StartReconfigureMethodAsync(
+            userId,
+            method,
+            request,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken
+        );
+        return ToActionResult(response);
     }
 
     [Authorize]
@@ -579,30 +454,22 @@ public class MfaController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                return Unauthorized(new { message = "Invalid token." });
-            }
-
-            var response = await _mfaService.CompleteReconfigureMethodAsync(
-                userId,
-                method,
-                request,
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred completing MFA method reconfiguration for {Method}.", method);
-            return Problem("An error occurred while completing MFA method reconfiguration.");
-        }
+
+        var response = await _mfaService.CompleteReconfigureMethodAsync(
+            userId,
+            method,
+            request,
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
-    private IActionResult ToActionResult<T>(Result<T> result)
+    private new IActionResult ToActionResult<T>(Result<T> result)
     {
         var payload = result.ToResponsePayload();
 
@@ -643,18 +510,10 @@ public class MfaController : ControllerBase
         return result.IsSuccess ? Ok(payload) : BadRequest(payload);
     }
 
-    private static string GetProblemTitle(int statusCode)
-    {
-        return statusCode switch
-        {
-            StatusCodes.Status409Conflict => "Conflict",
-            StatusCodes.Status410Gone => "Gone",
-            StatusCodes.Status429TooManyRequests => "Too Many Requests",
-            StatusCodes.Status503ServiceUnavailable => "Service Unavailable",
-            _ => "Request Failed",
-        };
-    }
-
+    // NOTE: token_type and JTI are validated at the MfaChallengeScheme middleware level.
+    // DB session lookup is intentionally omitted here — endpoints in this controller do not
+    // issue access tokens directly (VerifyChallenge delegates that to MfaService).
+    // Do NOT merge with Fido2Controller.ValidateMfaTokenContext — they have different security requirements.
     private async Task<(long UserId, Guid MfaTransactionId, IActionResult? ErrorResult)> ValidateMfaTokenContext(
         CancellationToken cancellationToken
     )
@@ -677,7 +536,7 @@ public class MfaController : ControllerBase
                 cancellationToken
             );
 
-            return (0, Guid.Empty, Unauthorized(new { message = "Invalid MFA context." }));
+            return (0, Guid.Empty, UnauthorizedProblem("Invalid MFA context."));
         }
 
         return (userId, mfaTransactionId, null);
@@ -705,19 +564,10 @@ public class MfaController : ControllerBase
                 cancellationToken
             );
 
-            return (0, Guid.Empty, Unauthorized(new { message = "Invalid enrollment context." }));
+            return (0, Guid.Empty, UnauthorizedProblem("Invalid enrollment context."));
         }
 
         return (userId, enrollmentSessionId, null);
-    }
-
-    private static bool TryGetUserId(ClaimsPrincipal user, out long userId)
-    {
-        var userIdValue = user.FindFirst("sub")?.Value
-            ?? user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-            ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-        return long.TryParse(userIdValue, out userId);
     }
 
     private sealed class NullMfaLoginEnrollmentSessionRepository : IMfaLoginEnrollmentSessionRepository

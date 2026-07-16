@@ -12,7 +12,7 @@ namespace Authentication.Fido2.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class Fido2Controller : ControllerBase
+public class Fido2Controller : ApiControllerBase
 {
     private readonly IFido2MfaService _fido2MfaService;
     private readonly IMfaTempTokenSessionRepository _mfaTempTokenSessionRepository;
@@ -38,39 +38,30 @@ public class Fido2Controller : ControllerBase
     [HttpPost("enrollments")]
     public async Task<IActionResult> CreateEnrollmentOptions(CancellationToken cancellationToken)
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                await _auditService.TrackSecurityEventAsync(
-                    "Authentication",
-                    "auth.fido2.enrollment.options",
-                    "Warning",
-                    false,
-                    null,
-                    null,
-                    "Invalid token",
-                    null,
-                    cancellationToken
-                );
-                return UnauthorizedProblem("Invalid token.");
-            }
-
-            var response = await _fido2MfaService.CreateEnrollmentOptionsAsync(
-                userId,
-                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                Request.Headers.UserAgent.ToString(),
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.fido2.enrollment.options",
+                "Warning",
+                false,
+                null,
+                null,
+                "Invalid token",
+                null,
                 cancellationToken
             );
-
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred creating FIDO2 enrollment options.");
 
-            return Problem("An error occurred while creating FIDO2 enrollment options.");
-        }
+        var response = await _fido2MfaService.CreateEnrollmentOptionsAsync(
+            userId,
+            HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize]
@@ -80,39 +71,30 @@ public class Fido2Controller : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        if (!TryGetUserId(User, out var userId))
         {
-            if (!TryGetUserId(User, out var userId))
-            {
-                await _auditService.TrackSecurityEventAsync(
-                    "Authentication",
-                    "auth.fido2.enrollment.complete",
-                    "Warning",
-                    false,
-                    null,
-                    null,
-                    "Invalid token",
-                    null,
-                    cancellationToken
-                );
-
-                return UnauthorizedProblem("Invalid token.");
-            }
-
-            var response = await _fido2MfaService.CompleteEnrollmentAsync(
-                request,
-                userId,
+            await _auditService.TrackSecurityEventAsync(
+                "Authentication",
+                "auth.fido2.enrollment.complete",
+                "Warning",
+                false,
+                null,
+                null,
+                "Invalid token",
+                null,
                 cancellationToken
             );
 
-            return ToActionResult(response);
+            return UnauthorizedProblem("Invalid token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred completing FIDO2 enrollment.");
 
-            return Problem("An error occurred while completing FIDO2 enrollment.");
-        }
+        var response = await _fido2MfaService.CompleteEnrollmentAsync(
+            request,
+            userId,
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
@@ -122,30 +104,21 @@ public class Fido2Controller : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        try
+        var mfaContextResult = await ValidateMfaTokenContext(cancellationToken);
+        if (mfaContextResult.ErrorResult is not null)
         {
-            var mfaContextResult = await ValidateMfaTokenContext(cancellationToken);
-            if (mfaContextResult.ErrorResult is not null)
-            {
-                return mfaContextResult.ErrorResult;
-            }
-
-            var response = await _fido2MfaService.CreateLoginOptionsAsync(
-                mfaContextResult.UserId,
-                mfaContextResult.MfaTransactionId,
-                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                Request.Headers.UserAgent.ToString(),
-                cancellationToken
-            );
-
-            return ToActionResult(response);
+            return mfaContextResult.ErrorResult;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred creating FIDO2 login options.");
 
-            return Problem("An error occurred while creating FIDO2 login options.");
-        }
+        var response = await _fido2MfaService.CreateLoginOptionsAsync(
+            mfaContextResult.UserId,
+            mfaContextResult.MfaTransactionId,
+            HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken
+        );
+
+        return ToActionResult(response);
     }
 
     [Authorize(AuthenticationSchemes = AuthenticationExtensions.MfaChallengeScheme)]
@@ -186,61 +159,12 @@ public class Fido2Controller : ControllerBase
 
             return UnauthorizedProblem("Invalid MFA token.");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred completing FIDO2 login.");
-
-            return Problem("An error occurred while completing FIDO2 login.");
-        }
+        // Generic exceptions handled by GlobalExceptionFilter
     }
 
-    private IActionResult ToActionResult<T>(Result<T> result)
-    {
-        var payload = result.ToResponsePayload();
-
-        if (result.StatusCode.HasValue)
-        {
-            var statusCode = result.StatusCode.Value;
-            if (statusCode >= StatusCodes.Status400BadRequest)
-            {
-                var problemDetails = new ProblemDetails
-                {
-                    Status = statusCode,
-                    Title = GetProblemTitle(statusCode),
-                    Detail = result.Error ?? result.Message,
-                };
-
-                if (!string.IsNullOrWhiteSpace(result.Error))
-                {
-                    problemDetails.Extensions["code"] = result.Error;
-                }
-
-                return StatusCode(statusCode, problemDetails);
-            }
-
-            return StatusCode(statusCode, payload);
-        }
-
-        if (result.IsSuccess)
-        {
-            return Ok(payload);
-        }
-
-        var badRequest = new ProblemDetails
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Title = "Bad Request",
-            Detail = result.Error ?? result.Message,
-        };
-
-        if (!string.IsNullOrWhiteSpace(result.Error))
-        {
-            badRequest.Extensions["code"] = result.Error;
-        }
-
-        return BadRequest(badRequest);
-    }
-
+    // NOTE: This method performs an additional DB session lookup (GetActiveByJtiAsync) to prevent
+    // token replay attacks — Fido2Controller is the one that issues the final access token.
+    // Do NOT merge with MfaController.ValidateMfaTokenContext — they have different security requirements.
     private async Task<(long UserId, Guid MfaTransactionId, IActionResult? ErrorResult)> ValidateMfaTokenContext(
         CancellationToken cancellationToken
     )
@@ -296,42 +220,5 @@ public class Fido2Controller : ControllerBase
         }
 
         return (userId, mfaTransactionId, null);
-    }
-
-    private static bool TryGetUserId(ClaimsPrincipal user, out long userId)
-    {
-        var userIdValue = user.FindFirst("sub")?.Value
-            ?? user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-            ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-        return long.TryParse(userIdValue, out userId);
-    }
-
-    private static IActionResult UnauthorizedProblem(string detail)
-    {
-        var problem = new ProblemDetails
-        {
-            Status = StatusCodes.Status401Unauthorized,
-            Title = "Unauthorized",
-            Detail = detail,
-        };
-
-        return new UnauthorizedObjectResult(problem);
-    }
-
-    private static string GetProblemTitle(int statusCode)
-    {
-        return statusCode switch
-        {
-            StatusCodes.Status400BadRequest => "Bad Request",
-            StatusCodes.Status401Unauthorized => "Unauthorized",
-            StatusCodes.Status403Forbidden => "Forbidden",
-            StatusCodes.Status404NotFound => "Not Found",
-            StatusCodes.Status409Conflict => "Conflict",
-            StatusCodes.Status410Gone => "Gone",
-            StatusCodes.Status429TooManyRequests => "Too Many Requests",
-            StatusCodes.Status503ServiceUnavailable => "Service Unavailable",
-            _ => "Request Failed",
-        };
     }
 }

@@ -16,7 +16,7 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
 
     public async Task AddAsync(MfaTempTokenSession session, CancellationToken cancellationToken)
     {
-        await _context.MfaSessions.AddAsync(
+        await _context.MfaTokenSessions.AddAsync(
             new MfaSession
             {
                 Id = session.Id,
@@ -46,7 +46,7 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
         var now = DateTime.UtcNow;
 
         var session = await _context
-            .MfaSessions
+            .MfaTokenSessions
             .AsNoTracking()
             .FirstOrDefaultAsync(
                 x => x.SessionType == MfaSessionTypes.TempToken
@@ -80,7 +80,7 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
     public async Task ConsumeByTransactionAsync(Guid mfaTransactionId, CancellationToken cancellationToken)
     {
         var sessions = await _context
-            .MfaSessions.Where(
+            .MfaTokenSessions.Where(
                 x =>
                     x.SessionType == MfaSessionTypes.TempToken
                     && x.MfaTransactionId == mfaTransactionId
@@ -107,7 +107,7 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
         var now = DateTime.UtcNow;
 
         var sessions = await _context
-            .MfaSessions.Where(
+            .MfaTokenSessions.Where(
                 x =>
                     x.SessionType == MfaSessionTypes.TempToken
                     && x.TokenJti == tokenJti
@@ -135,7 +135,7 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
         var now = DateTime.UtcNow;
 
         var sessions = await _context
-            .MfaSessions.Where(
+            .MfaTokenSessions.Where(
                 x =>
                     x.SessionType == MfaSessionTypes.TempToken
                     && x.UserId == userId

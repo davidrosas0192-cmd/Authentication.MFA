@@ -10,11 +10,11 @@ public class MfaSessionConfiguration : IEntityTypeConfiguration<MfaSession>
     public void Configure(EntityTypeBuilder<MfaSession> builder)
     {
         builder.ToTable(
-            "MfaSessions",
+            "MfaTokenSessions",
             t =>
                 t.HasCheckConstraint(
-                    "CK_MfaSessions_SessionType",
-                    $"[SessionType] IN ('{MfaSessionTypes.TempToken}', '{MfaSessionTypes.LoginEnrollment}')"
+                    "CK_MfaTokenSessions_SessionType",
+                    $"[SessionType] IN ('{MfaSessionTypes.TempToken}')"
                 )
         );
 

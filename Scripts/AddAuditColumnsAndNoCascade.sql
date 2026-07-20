@@ -4,12 +4,11 @@ SET XACT_ABORT ON;
 BEGIN TRANSACTION;
 
 DROP TABLE IF EXISTS dbo.RefreshTokenSessions;
-DROP TABLE IF EXISTS dbo.MfaTempTokenSessions;
 DROP TABLE IF EXISTS dbo.Fido2Transactions;
 DROP TABLE IF EXISTS dbo.UserRecoveryCodes;
-DROP TABLE IF EXISTS dbo.MfaLoginEnrollmentSessions;
+DROP TABLE IF EXISTS dbo.MfaEnrollmentTokenSessions;
 DROP TABLE IF EXISTS dbo.MfaManagementSessions;
-DROP TABLE IF EXISTS dbo.MfaSessions;
+DROP TABLE IF EXISTS dbo.MfaTokenSessions;
 DROP TABLE IF EXISTS dbo.UserMfaMethods;
 DROP TABLE IF EXISTS dbo.AccessTokenSessions;
 DROP TABLE IF EXISTS dbo.MfaChallenges;
@@ -219,23 +218,7 @@ CREATE INDEX IX_MfaChallenges_ContinuationToken ON dbo.MfaChallenges (Continuati
 CREATE INDEX IX_MfaChallenges_ProviderRequestId ON dbo.MfaChallenges (ProviderRequestId);
 CREATE INDEX IX_MfaChallenges_Status_CreatedAtUtc ON dbo.MfaChallenges (Status, CreatedAtUtc);
 
-CREATE TABLE dbo.MfaTempTokenSessions (
-    Id uniqueidentifier NOT NULL,
-    UserId bigint NOT NULL,
-    MfaTransactionId uniqueidentifier NOT NULL,
-    TokenJti nvarchar(max) NOT NULL,
-    IssuedAtUtc datetime2 NOT NULL,
-    ExpiresAtUtc datetime2 NOT NULL,
-    ConsumedAtUtc datetime2 NULL,
-    RevokedAtUtc datetime2 NULL,
-    IpAddress nvarchar(max) NULL,
-    UserAgent nvarchar(max) NULL,
-    CreatedBy nvarchar(450) NULL,
-    ModifiedBy nvarchar(450) NULL,
-    CONSTRAINT PK_MfaTempTokenSessions PRIMARY KEY (Id)
-);
-
-CREATE TABLE dbo.MfaLoginEnrollmentSessions (
+CREATE TABLE dbo.MfaEnrollmentTokenSessions (
     Id uniqueidentifier NOT NULL,
     UserId bigint NOT NULL,
     Status nvarchar(max) NOT NULL,
@@ -249,12 +232,12 @@ CREATE TABLE dbo.MfaLoginEnrollmentSessions (
     ModifiedAtUtc datetime2 NOT NULL,
     CreatedBy nvarchar(450) NULL,
     ModifiedBy nvarchar(450) NULL,
-    CONSTRAINT PK_MfaLoginEnrollmentSessions PRIMARY KEY (Id)
+    CONSTRAINT PK_MfaEnrollmentTokenSessions PRIMARY KEY (Id)
 );
 
-CREATE INDEX IX_MfaLoginEnrollmentSessions_UserId_Status_ExpiresAtUtc ON dbo.MfaLoginEnrollmentSessions (UserId, Status, ExpiresAtUtc);
-CREATE INDEX IX_MfaLoginEnrollmentSessions_ContinuationToken ON dbo.MfaLoginEnrollmentSessions (ContinuationToken);
-CREATE INDEX IX_MfaLoginEnrollmentSessions_ChallengeId ON dbo.MfaLoginEnrollmentSessions (ChallengeId);
+CREATE INDEX IX_MfaEnrollmentTokenSessions_UserId_Status_ExpiresAtUtc ON dbo.MfaEnrollmentTokenSessions (UserId, Status, ExpiresAtUtc);
+CREATE INDEX IX_MfaEnrollmentTokenSessions_ContinuationToken ON dbo.MfaEnrollmentTokenSessions (ContinuationToken);
+CREATE INDEX IX_MfaEnrollmentTokenSessions_ChallengeId ON dbo.MfaEnrollmentTokenSessions (ChallengeId);
 
 CREATE TABLE dbo.MfaManagementSessions (
     Id uniqueidentifier NOT NULL,
@@ -276,7 +259,7 @@ CREATE INDEX IX_MfaManagementSessions_UserId_Status_ExpiresAtUtc ON dbo.MfaManag
 CREATE INDEX IX_MfaManagementSessions_ContinuationToken ON dbo.MfaManagementSessions (ContinuationToken);
 CREATE INDEX IX_MfaManagementSessions_ChallengeId ON dbo.MfaManagementSessions (ChallengeId);
 
-CREATE TABLE dbo.MfaSessions (
+CREATE TABLE dbo.MfaTokenSessions (
     Id uniqueidentifier NOT NULL,
     UserId bigint NOT NULL,
     SessionType nvarchar(40) NOT NULL,
@@ -297,16 +280,16 @@ CREATE TABLE dbo.MfaSessions (
     RevokedAtUtc datetime2 NULL,
     IpAddress nvarchar(100) NULL,
     UserAgent nvarchar(500) NULL,
-    CONSTRAINT PK_MfaSessions PRIMARY KEY (Id),
-    CONSTRAINT CK_MfaSessions_SessionType CHECK ([SessionType] IN ('TempToken', 'LoginEnrollment'))
+    CONSTRAINT PK_MfaTokenSessions PRIMARY KEY (Id),
+    CONSTRAINT CK_MfaTokenSessions_SessionType CHECK ([SessionType] IN ('TempToken'))
 );
 
-CREATE UNIQUE INDEX IX_MfaSessions_TokenJti ON dbo.MfaSessions (TokenJti);
-CREATE INDEX IX_MfaSessions_UserId_SessionType_ExpiresAtUtc ON dbo.MfaSessions (UserId, SessionType, ExpiresAtUtc);
-CREATE INDEX IX_MfaSessions_SessionType_Status_ExpiresAtUtc ON dbo.MfaSessions (SessionType, Status, ExpiresAtUtc);
-CREATE INDEX IX_MfaSessions_ContinuationToken ON dbo.MfaSessions (ContinuationToken);
-CREATE INDEX IX_MfaSessions_ChallengeId ON dbo.MfaSessions (ChallengeId);
-CREATE INDEX IX_MfaSessions_MfaTransactionId ON dbo.MfaSessions (MfaTransactionId);
+CREATE UNIQUE INDEX IX_MfaTokenSessions_TokenJti ON dbo.MfaTokenSessions (TokenJti);
+CREATE INDEX IX_MfaTokenSessions_UserId_SessionType_ExpiresAtUtc ON dbo.MfaTokenSessions (UserId, SessionType, ExpiresAtUtc);
+CREATE INDEX IX_MfaTokenSessions_SessionType_Status_ExpiresAtUtc ON dbo.MfaTokenSessions (SessionType, Status, ExpiresAtUtc);
+CREATE INDEX IX_MfaTokenSessions_ContinuationToken ON dbo.MfaTokenSessions (ContinuationToken);
+CREATE INDEX IX_MfaTokenSessions_ChallengeId ON dbo.MfaTokenSessions (ChallengeId);
+CREATE INDEX IX_MfaTokenSessions_MfaTransactionId ON dbo.MfaTokenSessions (MfaTransactionId);
 
 CREATE TABLE dbo.Fido2Transactions (
     Id uniqueidentifier NOT NULL,
@@ -366,24 +349,16 @@ ALTER TABLE dbo.MfaChallenges
     ADD CONSTRAINT FK_MfaChallenges_Users_UserId
     FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-ALTER TABLE dbo.MfaTempTokenSessions
-    ADD CONSTRAINT FK_MfaTempTokenSessions_Users_UserId
-    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
-
-ALTER TABLE dbo.MfaTempTokenSessions
-    ADD CONSTRAINT FK_MfaTempTokenSessions_MfaChallenges_MfaTransactionId
-    FOREIGN KEY (MfaTransactionId) REFERENCES dbo.MfaChallenges (Id) ON DELETE NO ACTION;
-
-ALTER TABLE dbo.MfaLoginEnrollmentSessions
-    ADD CONSTRAINT FK_MfaLoginEnrollmentSessions_Users_UserId
+ALTER TABLE dbo.MfaEnrollmentTokenSessions
+    ADD CONSTRAINT FK_MfaEnrollmentTokenSessions_Users_UserId
     FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
 ALTER TABLE dbo.MfaManagementSessions
     ADD CONSTRAINT FK_MfaManagementSessions_Users_UserId
     FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-ALTER TABLE dbo.MfaSessions
-    ADD CONSTRAINT FK_MfaSessions_Users_UserId
+ALTER TABLE dbo.MfaTokenSessions
+    ADD CONSTRAINT FK_MfaTokenSessions_Users_UserId
     FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
 ALTER TABLE dbo.Fido2Transactions

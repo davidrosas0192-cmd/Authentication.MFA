@@ -202,9 +202,9 @@ Challenges MFA activos y completados (OTP, recovery code, FIDO2 selection).
 
 ---
 
-### `MfaTempTokenSessions`
+### `MfaTokenSessions`
 
-Sesiones de tokens MFA temporales emitidos después del login exitoso con contraseña (flujo MFA).
+Sesiones de tokens MFA temporales emitidos después del login exitoso con contraseña.
 
 | Columna | Tipo | Constraints | Descripción |
 |---------|------|-------------|-------------|
@@ -221,7 +221,7 @@ Sesiones de tokens MFA temporales emitidos después del login exitoso con contra
 
 ---
 
-### `MfaLoginEnrollmentSessions`
+### `MfaEnrollmentTokenSessions`
 
 Sesiones de enrollment MFA durante el login (usuarios sin MFA configurado).
 
@@ -329,7 +329,7 @@ Log de eventos de seguridad del sistema (token replay, rate limits, etc.).
 
 ### `MfaSessions` *(legacy)*
 
-Tabla de sesiones MFA de uso general. Contiene campos combinados de varios tipos de sesión.
+Tabla consolidada antigua. Ya no se crea en el script actual; se conserva solo como referencia histórica.
 
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
@@ -347,7 +347,7 @@ Tabla de sesiones MFA de uso general. Contiene campos combinados de varios tipos
 | `RevokedAtUtc` | `datetime2` | Revocación |
 | `IpAddress` / `UserAgent` | `nvarchar(max)` | Cliente |
 
-> ⚠️ Esta tabla es una versión legacy. Los flujos activos usan `MfaTempTokenSessions` y `MfaLoginEnrollmentSessions` en lugar de esta tabla.
+> ⚠️ Esta tabla es una versión legacy. Los flujos activos usan `MfaTokenSessions` y `MfaEnrollmentTokenSessions` en lugar de esta tabla.
 
 ---
 

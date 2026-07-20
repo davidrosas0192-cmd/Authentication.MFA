@@ -1,718 +1,397 @@
-﻿IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
-BEGIN
-    CREATE TABLE [__EFMigrationsHistory] (
-        [MigrationId] nvarchar(150) NOT NULL,
-        [ProductVersion] nvarchar(32) NOT NULL,
-        CONSTRAINT [PK___EFMigrationsHistory] PRIMARY KEY ([MigrationId])
-    );
-END;
-GO
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
 
 BEGIN TRANSACTION;
-CREATE TABLE [Users] (
-    [Id] bigint NOT NULL IDENTITY,
-    [Username] nvarchar(100) NOT NULL,
-    [Email] nvarchar(255) NOT NULL,
-    [PasswordHash] nvarchar(max) NOT NULL,
-    [IsActive] bit NOT NULL,
-    [IsFido2MfaEnabled] bit NOT NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    [LastLoginAtUtc] datetime2 NULL,
-    CONSTRAINT [PK_Users] PRIMARY KEY ([Id])
+
+DROP TABLE IF EXISTS dbo.RefreshTokenSessions;
+DROP TABLE IF EXISTS dbo.MfaTempTokenSessions;
+DROP TABLE IF EXISTS dbo.Fido2Transactions;
+DROP TABLE IF EXISTS dbo.UserRecoveryCodes;
+DROP TABLE IF EXISTS dbo.MfaLoginEnrollmentSessions;
+DROP TABLE IF EXISTS dbo.MfaManagementSessions;
+DROP TABLE IF EXISTS dbo.MfaSessions;
+DROP TABLE IF EXISTS dbo.UserMfaMethods;
+DROP TABLE IF EXISTS dbo.AccessTokenSessions;
+DROP TABLE IF EXISTS dbo.MfaChallenges;
+DROP TABLE IF EXISTS dbo.UserRecoveryCodeBatches;
+DROP TABLE IF EXISTS dbo.UserFido2Credentials;
+DROP TABLE IF EXISTS dbo.AuthenticationAuditEvents;
+DROP TABLE IF EXISTS dbo.SecurityAuditEvents;
+DROP TABLE IF EXISTS dbo.Users;
+
+CREATE TABLE dbo.Users (
+    Id bigint NOT NULL IDENTITY(1,1),
+    Username nvarchar(100) NOT NULL,
+    Email nvarchar(255) NOT NULL,
+    PasswordHash nvarchar(max) NOT NULL,
+    IsActive bit NOT NULL CONSTRAINT DF_Users_IsActive DEFAULT (1),
+    IsFido2MfaEnabled bit NOT NULL CONSTRAINT DF_Users_IsFido2MfaEnabled DEFAULT (0),
+    CreatedAtUtc datetime2 NOT NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    LastLoginAtUtc datetime2 NULL,
+    CONSTRAINT PK_Users PRIMARY KEY (Id)
 );
 
-CREATE UNIQUE INDEX [IX_Users_Email] ON [Users] ([Email]);
+CREATE UNIQUE INDEX IX_Users_Email ON dbo.Users (Email);
+CREATE UNIQUE INDEX IX_Users_Username ON dbo.Users (Username);
 
-CREATE UNIQUE INDEX [IX_Users_Username] ON [Users] ([Username]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260628025521_initialCreate', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260628025958_seedInitailUser', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'Id', N'CreatedAtUtc', N'Email', N'IsActive', N'IsFido2MfaEnabled', N'LastLoginAtUtc', N'PasswordHash', N'Username') AND [object_id] = OBJECT_ID(N'[Users]'))
-    SET IDENTITY_INSERT [Users] ON;
-INSERT INTO [Users] ([Id], [CreatedAtUtc], [Email], [IsActive], [IsFido2MfaEnabled], [LastLoginAtUtc], [PasswordHash], [Username])
-VALUES (CAST(1 AS bigint), '2026-06-28T00:00:00.0000000Z', N'davidrosas0192@gmail.com', CAST(1 AS bit), CAST(0 AS bit), NULL, N'Rdavid58@', N'cruzrx2');
-IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'Id', N'CreatedAtUtc', N'Email', N'IsActive', N'IsFido2MfaEnabled', N'LastLoginAtUtc', N'PasswordHash', N'Username') AND [object_id] = OBJECT_ID(N'[Users]'))
-    SET IDENTITY_INSERT [Users] OFF;
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260628030850_initialSeed2', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-CREATE TABLE [UserFido2Credentials] (
-    [Id] bigint NOT NULL IDENTITY,
-    [UserId] bigint NOT NULL,
-    [CredentialId] varbinary(900) NOT NULL,
-    [PublicKey] varbinary(max) NOT NULL,
-    [UserHandle] varbinary(max) NOT NULL,
-    [SignatureCounter] bigint NOT NULL,
-    [AaGuid] nvarchar(max) NULL,
-    [CredType] nvarchar(max) NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    [LastUsedAtUtc] datetime2 NULL,
-    CONSTRAINT [PK_UserFido2Credentials] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_UserFido2Credentials_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
+CREATE TABLE dbo.AuthenticationAuditEvents (
+    Id bigint NOT NULL IDENTITY(1,1),
+    OccurredAtUtc datetime2 NOT NULL,
+    UserId bigint NULL,
+    UsernameOrEmail nvarchar(320) NULL,
+    Stage nvarchar(60) NOT NULL,
+    Method nvarchar(30) NOT NULL,
+    Outcome nvarchar(20) NOT NULL,
+    FailureReason nvarchar(400) NULL,
+    IpAddress nvarchar(100) NULL,
+    UserAgent nvarchar(500) NULL,
+    CorrelationId nvarchar(100) NULL,
+    CONSTRAINT PK_AuthenticationAuditEvents PRIMARY KEY (Id)
 );
 
-CREATE UNIQUE INDEX [IX_UserFido2Credentials_CredentialId] ON [UserFido2Credentials] ([CredentialId]);
-
-CREATE INDEX [IX_UserFido2Credentials_UserId] ON [UserFido2Credentials] ([UserId]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260628064059_CreateUserCredentialFido2', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-CREATE TABLE [Fido2Transactions] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [Type] nvarchar(50) NOT NULL,
-    [OptionsJson] nvarchar(max) NOT NULL,
-    [IsUsed] bit NOT NULL,
-    [IpAddress] nvarchar(100) NOT NULL,
-    [UserAgent] nvarchar(500) NOT NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    [ExpiresAtUtc] datetime2 NOT NULL,
-    CONSTRAINT [PK_Fido2Transactions] PRIMARY KEY ([Id])
+CREATE TABLE dbo.SecurityAuditEvents (
+    Id bigint NOT NULL IDENTITY(1,1),
+    OccurredAtUtc datetime2 NOT NULL,
+    Category nvarchar(60) NOT NULL,
+    EventType nvarchar(120) NOT NULL,
+    Severity nvarchar(30) NOT NULL,
+    Outcome nvarchar(20) NOT NULL,
+    UserId bigint NULL,
+    UsernameOrEmail nvarchar(320) NULL,
+    IpAddress nvarchar(100) NULL,
+    UserAgent nvarchar(500) NULL,
+    CorrelationId nvarchar(100) NULL,
+    RequestPath nvarchar(300) NULL,
+    HttpMethod nvarchar(10) NULL,
+    FailureReason nvarchar(400) NULL,
+    DetailsJson nvarchar(max) NULL,
+    CONSTRAINT PK_SecurityAuditEvents PRIMARY KEY (Id)
 );
 
-CREATE INDEX [IX_Fido2Transactions_UserId_Type_IsUsed] ON [Fido2Transactions] ([UserId], [Type], [IsUsed]);
+CREATE INDEX IX_AuthenticationAuditEvents_IpAddress_OccurredAtUtc ON dbo.AuthenticationAuditEvents (IpAddress, OccurredAtUtc);
+CREATE INDEX IX_AuthenticationAuditEvents_OccurredAtUtc ON dbo.AuthenticationAuditEvents (OccurredAtUtc);
+CREATE INDEX IX_AuthenticationAuditEvents_Outcome_OccurredAtUtc ON dbo.AuthenticationAuditEvents (Outcome, OccurredAtUtc);
+CREATE INDEX IX_AuthenticationAuditEvents_UserId_OccurredAtUtc ON dbo.AuthenticationAuditEvents (UserId, OccurredAtUtc);
+CREATE INDEX IX_AuthenticationAuditEvents_UsernameOrEmail_OccurredAtUtc ON dbo.AuthenticationAuditEvents (UsernameOrEmail, OccurredAtUtc);
+CREATE INDEX IX_SecurityAuditEvents_Category_OccurredAtUtc ON dbo.SecurityAuditEvents (Category, OccurredAtUtc);
+CREATE INDEX IX_SecurityAuditEvents_IpAddress_OccurredAtUtc ON dbo.SecurityAuditEvents (IpAddress, OccurredAtUtc);
+CREATE INDEX IX_SecurityAuditEvents_OccurredAtUtc ON dbo.SecurityAuditEvents (OccurredAtUtc);
+CREATE INDEX IX_SecurityAuditEvents_Outcome_OccurredAtUtc ON dbo.SecurityAuditEvents (Outcome, OccurredAtUtc);
+CREATE INDEX IX_SecurityAuditEvents_UserId_OccurredAtUtc ON dbo.SecurityAuditEvents (UserId, OccurredAtUtc);
 
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260628065014_AddFid2Transactions', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-CREATE TABLE [AuthenticationAuditEvents] (
-    [Id] bigint NOT NULL IDENTITY,
-    [OccurredAtUtc] datetime2 NOT NULL,
-    [UserId] bigint NULL,
-    [UsernameOrEmail] nvarchar(320) NULL,
-    [Stage] nvarchar(60) NOT NULL,
-    [Method] nvarchar(30) NOT NULL,
-    [Outcome] nvarchar(20) NOT NULL,
-    [FailureReason] nvarchar(400) NULL,
-    [IpAddress] nvarchar(100) NULL,
-    [UserAgent] nvarchar(500) NULL,
-    [CorrelationId] nvarchar(100) NULL,
-    CONSTRAINT [PK_AuthenticationAuditEvents] PRIMARY KEY ([Id])
+CREATE TABLE dbo.UserRecoveryCodeBatches (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    IssuedAtUtc datetime2 NOT NULL,
+    ReplacedAtUtc datetime2 NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    CONSTRAINT PK_UserRecoveryCodeBatches PRIMARY KEY (Id)
 );
 
-CREATE TABLE [SecurityAuditEvents] (
-    [Id] bigint NOT NULL IDENTITY,
-    [OccurredAtUtc] datetime2 NOT NULL,
-    [Category] nvarchar(60) NOT NULL,
-    [EventType] nvarchar(120) NOT NULL,
-    [Severity] nvarchar(30) NOT NULL,
-    [Outcome] nvarchar(20) NOT NULL,
-    [UserId] bigint NULL,
-    [UsernameOrEmail] nvarchar(320) NULL,
-    [IpAddress] nvarchar(100) NULL,
-    [UserAgent] nvarchar(500) NULL,
-    [CorrelationId] nvarchar(100) NULL,
-    [RequestPath] nvarchar(300) NULL,
-    [HttpMethod] nvarchar(10) NULL,
-    [FailureReason] nvarchar(400) NULL,
-    [DetailsJson] nvarchar(max) NULL,
-    CONSTRAINT [PK_SecurityAuditEvents] PRIMARY KEY ([Id])
+CREATE TABLE dbo.UserRecoveryCodes (
+    Id uniqueidentifier NOT NULL,
+    BatchId uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    CodeHash nvarchar(max) NOT NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    UsedAtUtc datetime2 NULL,
+    CONSTRAINT PK_UserRecoveryCodes PRIMARY KEY (Id)
 );
 
-CREATE INDEX [IX_AuthenticationAuditEvents_IpAddress_OccurredAtUtc] ON [AuthenticationAuditEvents] ([IpAddress], [OccurredAtUtc]);
+CREATE INDEX IX_UserRecoveryCodeBatches_UserId_IssuedAtUtc ON dbo.UserRecoveryCodeBatches (UserId, IssuedAtUtc);
+CREATE INDEX IX_UserRecoveryCodeBatches_UserId_ReplacedAtUtc ON dbo.UserRecoveryCodeBatches (UserId, ReplacedAtUtc);
+CREATE INDEX IX_UserRecoveryCodes_BatchId ON dbo.UserRecoveryCodes (BatchId);
+CREATE INDEX IX_UserRecoveryCodes_UserId ON dbo.UserRecoveryCodes (UserId);
 
-CREATE INDEX [IX_AuthenticationAuditEvents_OccurredAtUtc] ON [AuthenticationAuditEvents] ([OccurredAtUtc]);
-
-CREATE INDEX [IX_AuthenticationAuditEvents_Outcome_OccurredAtUtc] ON [AuthenticationAuditEvents] ([Outcome], [OccurredAtUtc]);
-
-CREATE INDEX [IX_AuthenticationAuditEvents_UserId_OccurredAtUtc] ON [AuthenticationAuditEvents] ([UserId], [OccurredAtUtc]);
-
-CREATE INDEX [IX_AuthenticationAuditEvents_UsernameOrEmail_OccurredAtUtc] ON [AuthenticationAuditEvents] ([UsernameOrEmail], [OccurredAtUtc]);
-
-CREATE INDEX [IX_SecurityAuditEvents_Category_OccurredAtUtc] ON [SecurityAuditEvents] ([Category], [OccurredAtUtc]);
-
-CREATE INDEX [IX_SecurityAuditEvents_IpAddress_OccurredAtUtc] ON [SecurityAuditEvents] ([IpAddress], [OccurredAtUtc]);
-
-CREATE INDEX [IX_SecurityAuditEvents_OccurredAtUtc] ON [SecurityAuditEvents] ([OccurredAtUtc]);
-
-CREATE INDEX [IX_SecurityAuditEvents_Outcome_OccurredAtUtc] ON [SecurityAuditEvents] ([Outcome], [OccurredAtUtc]);
-
-CREATE INDEX [IX_SecurityAuditEvents_UserId_OccurredAtUtc] ON [SecurityAuditEvents] ([UserId], [OccurredAtUtc]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260710011815_AddOwaspAuditTables', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-CREATE TABLE [MfaChallenges] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [Method] nvarchar(30) NULL,
-    [Provider] nvarchar(30) NULL,
-    [ProviderRequestId] nvarchar(120) NULL,
-    [Channel] nvarchar(30) NULL,
-    [Status] nvarchar(30) NOT NULL,
-    [ExpiresAtUtc] datetime2 NOT NULL,
-    [VerifiedAtUtc] datetime2 NULL,
-    [IpAddress] nvarchar(100) NULL,
-    [UserAgent] nvarchar(500) NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    CONSTRAINT [PK_MfaChallenges] PRIMARY KEY ([Id])
+CREATE TABLE dbo.UserFido2Credentials (
+    Id bigint NOT NULL IDENTITY(1,1),
+    UserId bigint NOT NULL,
+    CredentialId varbinary(900) NOT NULL,
+    PublicKey varbinary(max) NOT NULL,
+    UserHandle varbinary(max) NOT NULL,
+    SignatureCounter bigint NOT NULL,
+    AaGuid nvarchar(max) NULL,
+    CredType nvarchar(max) NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    LastUsedAtUtc datetime2 NULL,
+    CONSTRAINT PK_UserFido2Credentials PRIMARY KEY (Id)
 );
 
-CREATE TABLE [UserMfaMethods] (
-    [Id] bigint NOT NULL IDENTITY,
-    [UserId] bigint NOT NULL,
-    [Method] nvarchar(30) NOT NULL,
-    [IsEnabled] bit NOT NULL,
-    [IsPrimary] bit NOT NULL,
-    [IsVerified] bit NOT NULL,
-    [ContactValue] nvarchar(320) NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    [UpdatedAtUtc] datetime2 NOT NULL,
-    CONSTRAINT [PK_UserMfaMethods] PRIMARY KEY ([Id])
+CREATE UNIQUE INDEX IX_UserFido2Credentials_CredentialId ON dbo.UserFido2Credentials (CredentialId);
+CREATE INDEX IX_UserFido2Credentials_UserId ON dbo.UserFido2Credentials (UserId);
+
+CREATE TABLE dbo.UserMfaMethods (
+    Id bigint NOT NULL IDENTITY(1,1),
+    UserId bigint NOT NULL,
+    Method nvarchar(30) NOT NULL,
+    IsEnabled bit NOT NULL CONSTRAINT DF_UserMfaMethods_IsEnabled DEFAULT (1),
+    IsPrimary bit NOT NULL,
+    IsVerified bit NOT NULL,
+    ContactValue nvarchar(320) NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    ModifiedAtUtc datetime2 NOT NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    CONSTRAINT PK_UserMfaMethods PRIMARY KEY (Id)
 );
 
-CREATE INDEX [IX_MfaChallenges_ProviderRequestId] ON [MfaChallenges] ([ProviderRequestId]);
+CREATE UNIQUE INDEX IX_UserMfaMethods_UserId_Method ON dbo.UserMfaMethods (UserId, Method);
+CREATE INDEX IX_UserMfaMethods_UserId_IsEnabled ON dbo.UserMfaMethods (UserId, IsEnabled);
+CREATE INDEX IX_UserMfaMethods_Method_ContactValue_Active ON dbo.UserMfaMethods (Method, ContactValue) WHERE IsEnabled = 1;
 
-CREATE INDEX [IX_MfaChallenges_UserId_Status_ExpiresAtUtc] ON [MfaChallenges] ([UserId], [Status], [ExpiresAtUtc]);
-
-CREATE INDEX [IX_UserMfaMethods_UserId_IsEnabled] ON [UserMfaMethods] ([UserId], [IsEnabled]);
-
-CREATE UNIQUE INDEX [IX_UserMfaMethods_UserId_Method] ON [UserMfaMethods] ([UserId], [Method]);
-
-INSERT INTO UserMfaMethods (UserId, Method, IsEnabled, IsPrimary, IsVerified, ContactValue, CreatedAtUtc, UpdatedAtUtc)
-SELECT u.Id, 'fido2', 1, 1, 1, NULL, SYSUTCDATETIME(), SYSUTCDATETIME()
-FROM Users u
-WHERE u.IsFido2MfaEnabled = 1
-    AND NOT EXISTS (
-            SELECT 1
-            FROM UserMfaMethods m
-            WHERE m.UserId = u.Id
-                AND m.Method = 'fido2'
-    );
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260710014547_AddTwilioMfaMethodsAndChallenges', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-IF EXISTS (SELECT 1 FROM Users WHERE Id = 1)
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM UserMfaMethods WHERE UserId = 1 AND Method = 'email')
-    BEGIN
-        INSERT INTO UserMfaMethods
-            (UserId, Method, IsEnabled, IsPrimary, IsVerified, ContactValue, CreatedAtUtc, UpdatedAtUtc)
-        VALUES
-            (1, 'email', 1, 0, 1, 'davidrosas0192@gmail.com', SYSUTCDATETIME(), SYSUTCDATETIME());
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM UserMfaMethods WHERE UserId = 1 AND Method = 'sms')
-    BEGIN
-        INSERT INTO UserMfaMethods
-            (UserId, Method, IsEnabled, IsPrimary, IsVerified, ContactValue, CreatedAtUtc, UpdatedAtUtc)
-        VALUES
-            (1, 'sms', 1, 0, 0, '+15555550100', SYSUTCDATETIME(), SYSUTCDATETIME());
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM UserMfaMethods WHERE UserId = 1 AND Method = 'fido2')
-    BEGIN
-        INSERT INTO UserMfaMethods
-            (UserId, Method, IsEnabled, IsPrimary, IsVerified, ContactValue, CreatedAtUtc, UpdatedAtUtc)
-        VALUES
-            (1, 'fido2', 1, 1, 1, NULL, SYSUTCDATETIME(), SYSUTCDATETIME());
-    END;
-END;
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260710014906_SeedDefaultUserMfaMethods', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-ALTER TABLE [MfaChallenges] ADD [ContactValue] nvarchar(320) NULL;
-
-ALTER TABLE [MfaChallenges] ADD [Purpose] nvarchar(30) NOT NULL DEFAULT N'';
-
-CREATE INDEX [IX_MfaChallenges_UserId_Purpose_Status_ExpiresAtUtc] ON [MfaChallenges] ([UserId], [Purpose], [Status], [ExpiresAtUtc]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260710015218_AddMfaEnrollmentChallengeFields', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-ALTER TABLE [Fido2Transactions] ADD [ParentMfaTransactionId] uniqueidentifier NULL;
-
-CREATE TABLE [MfaTempTokenSessions] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [MfaTransactionId] uniqueidentifier NOT NULL,
-    [TokenJti] nvarchar(100) NOT NULL,
-    [IssuedAtUtc] datetime2 NOT NULL,
-    [ExpiresAtUtc] datetime2 NOT NULL,
-    [ConsumedAtUtc] datetime2 NULL,
-    [RevokedAtUtc] datetime2 NULL,
-    [IpAddress] nvarchar(100) NULL,
-    [UserAgent] nvarchar(500) NULL,
-    CONSTRAINT [PK_MfaTempTokenSessions] PRIMARY KEY ([Id])
+CREATE TABLE dbo.AccessTokenSessions (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    TokenJti nvarchar(100) NOT NULL,
+    IssuedAtUtc datetime2 NOT NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    RevokedAtUtc datetime2 NULL,
+    RevokeReason nvarchar(100) NULL,
+    IpAddress nvarchar(100) NULL,
+    UserAgent nvarchar(500) NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    CONSTRAINT PK_AccessTokenSessions PRIMARY KEY (Id)
 );
 
-CREATE INDEX [IX_Fido2Transactions_ParentMfaTransactionId] ON [Fido2Transactions] ([ParentMfaTransactionId]);
+CREATE UNIQUE INDEX IX_AccessTokenSessions_TokenJti ON dbo.AccessTokenSessions (TokenJti);
+CREATE INDEX IX_AccessTokenSessions_UserId_ExpiresAtUtc ON dbo.AccessTokenSessions (UserId, ExpiresAtUtc);
+CREATE INDEX IX_AccessTokenSessions_Active ON dbo.AccessTokenSessions (UserId, ExpiresAtUtc) WHERE RevokedAtUtc IS NULL;
 
-CREATE INDEX [IX_MfaTempTokenSessions_MfaTransactionId] ON [MfaTempTokenSessions] ([MfaTransactionId]);
-
-CREATE UNIQUE INDEX [IX_MfaTempTokenSessions_TokenJti] ON [MfaTempTokenSessions] ([TokenJti]);
-
-CREATE INDEX [IX_MfaTempTokenSessions_UserId_ExpiresAtUtc] ON [MfaTempTokenSessions] ([UserId], [ExpiresAtUtc]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260710042024_AddMfaTempTokenSessionsAndFido2ParentTx', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-CREATE TABLE [AccessTokenSessions] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [TokenJti] nvarchar(100) NOT NULL,
-    [IssuedAtUtc] datetime2 NOT NULL,
-    [ExpiresAtUtc] datetime2 NOT NULL,
-    [RevokedAtUtc] datetime2 NULL,
-    [RevokeReason] nvarchar(100) NULL,
-    [IpAddress] nvarchar(100) NULL,
-    [UserAgent] nvarchar(500) NULL,
-    CONSTRAINT [PK_AccessTokenSessions] PRIMARY KEY ([Id])
+CREATE TABLE dbo.RefreshTokenSessions (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    TokenHash nvarchar(256) NOT NULL,
+    AccessTokenSessionId uniqueidentifier NOT NULL,
+    IssuedAtUtc datetime2 NOT NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    RevokedAtUtc datetime2 NULL,
+    RevokeReason nvarchar(100) NULL,
+    LastRotatedAtUtc datetime2 NULL,
+    PreviousTokenSessionId uniqueidentifier NULL,
+    IpAddress nvarchar(100) NULL,
+    UserAgent nvarchar(500) NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    CONSTRAINT PK_RefreshTokenSessions PRIMARY KEY (Id)
 );
 
-CREATE UNIQUE INDEX [IX_AccessTokenSessions_TokenJti] ON [AccessTokenSessions] ([TokenJti]);
+CREATE UNIQUE INDEX IX_RefreshTokenSessions_TokenHash ON dbo.RefreshTokenSessions (TokenHash);
+CREATE INDEX IX_RefreshTokenSessions_UserId_ExpiresAtUtc_RevokedAtUtc ON dbo.RefreshTokenSessions (UserId, ExpiresAtUtc, RevokedAtUtc);
+CREATE INDEX IX_RefreshTokenSessions_AccessTokenSessionId ON dbo.RefreshTokenSessions (AccessTokenSessionId);
+CREATE INDEX IX_RefreshTokenSessions_PreviousTokenSessionId ON dbo.RefreshTokenSessions (PreviousTokenSessionId);
+CREATE INDEX IX_RefreshTokenSessions_Active ON dbo.RefreshTokenSessions (UserId, ExpiresAtUtc) WHERE RevokedAtUtc IS NULL;
 
-CREATE INDEX [IX_AccessTokenSessions_UserId_ExpiresAtUtc] ON [AccessTokenSessions] ([UserId], [ExpiresAtUtc]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260710050933_AddAccessTokenSessions', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-CREATE TABLE [UserRecoveryCodeBatches] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [IssuedAtUtc] datetime2 NOT NULL,
-    [ReplacedAtUtc] datetime2 NULL,
-    CONSTRAINT [PK_UserRecoveryCodeBatches] PRIMARY KEY ([Id])
+CREATE TABLE dbo.MfaChallenges (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    Purpose nvarchar(30) NOT NULL,
+    ContinuationToken nvarchar(100) NOT NULL,
+    StepVersion int NOT NULL,
+    Method nvarchar(30) NULL,
+    Provider nvarchar(30) NULL,
+    ProviderRequestId nvarchar(120) NULL,
+    Channel nvarchar(30) NULL,
+    ContactValue nvarchar(320) NULL,
+    Status nvarchar(30) NOT NULL,
+    FailedAttempts int NOT NULL CONSTRAINT DF_MfaChallenges_FailedAttempts DEFAULT (0),
+    LastFailedAttemptAtUtc datetime2 NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    VerifiedAtUtc datetime2 NULL,
+    IpAddress nvarchar(100) NULL,
+    UserAgent nvarchar(500) NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    CONSTRAINT PK_MfaChallenges PRIMARY KEY (Id)
 );
 
-CREATE TABLE [UserRecoveryCodes] (
-    [Id] uniqueidentifier NOT NULL,
-    [BatchId] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [CodeHash] nvarchar(400) NOT NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    [UsedAtUtc] datetime2 NULL,
-    CONSTRAINT [PK_UserRecoveryCodes] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_UserRecoveryCodes_UserRecoveryCodeBatches_BatchId] FOREIGN KEY ([BatchId]) REFERENCES [UserRecoveryCodeBatches] ([Id]) ON DELETE CASCADE
+CREATE INDEX IX_MfaChallenges_UserId_Status_ExpiresAtUtc ON dbo.MfaChallenges (UserId, Status, ExpiresAtUtc);
+CREATE INDEX IX_MfaChallenges_UserId_Purpose_Status_ExpiresAtUtc ON dbo.MfaChallenges (UserId, Purpose, Status, ExpiresAtUtc);
+CREATE INDEX IX_MfaChallenges_ContinuationToken ON dbo.MfaChallenges (ContinuationToken);
+CREATE INDEX IX_MfaChallenges_ProviderRequestId ON dbo.MfaChallenges (ProviderRequestId);
+CREATE INDEX IX_MfaChallenges_Status_CreatedAtUtc ON dbo.MfaChallenges (Status, CreatedAtUtc);
+
+CREATE TABLE dbo.MfaTempTokenSessions (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    MfaTransactionId uniqueidentifier NOT NULL,
+    TokenJti nvarchar(max) NOT NULL,
+    IssuedAtUtc datetime2 NOT NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    ConsumedAtUtc datetime2 NULL,
+    RevokedAtUtc datetime2 NULL,
+    IpAddress nvarchar(max) NULL,
+    UserAgent nvarchar(max) NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    CONSTRAINT PK_MfaTempTokenSessions PRIMARY KEY (Id)
 );
 
-CREATE INDEX [IX_UserRecoveryCodeBatches_UserId_IssuedAtUtc] ON [UserRecoveryCodeBatches] ([UserId], [IssuedAtUtc]);
-
-CREATE INDEX [IX_UserRecoveryCodeBatches_UserId_ReplacedAtUtc] ON [UserRecoveryCodeBatches] ([UserId], [ReplacedAtUtc]);
-
-CREATE INDEX [IX_UserRecoveryCodes_BatchId] ON [UserRecoveryCodes] ([BatchId]);
-
-CREATE INDEX [IX_UserRecoveryCodes_UserId_UsedAtUtc] ON [UserRecoveryCodes] ([UserId], [UsedAtUtc]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260710182817_AddRecoveryCodesAndMfaMethodManagement', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-CREATE TABLE [MfaManagementSessions] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [Status] nvarchar(40) NOT NULL,
-    [ChallengeId] uniqueidentifier NULL,
-    [ExpiresAtUtc] datetime2 NOT NULL,
-    [VerifiedAtUtc] datetime2 NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    [UpdatedAtUtc] datetime2 NOT NULL,
-    CONSTRAINT [PK_MfaManagementSessions] PRIMARY KEY ([Id])
+CREATE TABLE dbo.MfaLoginEnrollmentSessions (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    Status nvarchar(max) NOT NULL,
+    ContinuationToken nvarchar(max) NOT NULL,
+    StepVersion int NOT NULL,
+    TokenJti nvarchar(max) NOT NULL,
+    ChallengeId uniqueidentifier NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    CompletedAtUtc datetime2 NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    ModifiedAtUtc datetime2 NOT NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    CONSTRAINT PK_MfaLoginEnrollmentSessions PRIMARY KEY (Id)
 );
 
-CREATE INDEX [IX_MfaManagementSessions_ChallengeId] ON [MfaManagementSessions] ([ChallengeId]);
+CREATE INDEX IX_MfaLoginEnrollmentSessions_UserId_Status_ExpiresAtUtc ON dbo.MfaLoginEnrollmentSessions (UserId, Status, ExpiresAtUtc);
+CREATE INDEX IX_MfaLoginEnrollmentSessions_ContinuationToken ON dbo.MfaLoginEnrollmentSessions (ContinuationToken);
+CREATE INDEX IX_MfaLoginEnrollmentSessions_ChallengeId ON dbo.MfaLoginEnrollmentSessions (ChallengeId);
 
-CREATE INDEX [IX_MfaManagementSessions_UserId_Status_ExpiresAtUtc] ON [MfaManagementSessions] ([UserId], [Status], [ExpiresAtUtc]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260714005000_AddMfaManagementSessions', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-ALTER TABLE [MfaManagementSessions] ADD [ContinuationToken] nvarchar(100) NOT NULL DEFAULT N'';
-
-ALTER TABLE [MfaManagementSessions] ADD [StepVersion] int NOT NULL DEFAULT 0;
-
-CREATE INDEX [IX_MfaManagementSessions_ContinuationToken] ON [MfaManagementSessions] ([ContinuationToken]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260714005246_AddManagementSessionContinuationToken', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-ALTER TABLE [MfaChallenges] ADD [ContinuationToken] nvarchar(100) NOT NULL DEFAULT N'';
-
-ALTER TABLE [MfaChallenges] ADD [StepVersion] int NOT NULL DEFAULT 0;
-
-CREATE INDEX [IX_MfaChallenges_ContinuationToken] ON [MfaChallenges] ([ContinuationToken]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260714005816_AddMfaChallengeContinuationToken', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-CREATE TABLE [MfaLoginEnrollmentSessions] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [Status] nvarchar(40) NOT NULL,
-    [ContinuationToken] nvarchar(100) NOT NULL,
-    [StepVersion] int NOT NULL,
-    [TokenJti] nvarchar(100) NOT NULL,
-    [ChallengeId] uniqueidentifier NULL,
-    [ExpiresAtUtc] datetime2 NOT NULL,
-    [CompletedAtUtc] datetime2 NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    [UpdatedAtUtc] datetime2 NOT NULL,
-    CONSTRAINT [PK_MfaLoginEnrollmentSessions] PRIMARY KEY ([Id])
+CREATE TABLE dbo.MfaManagementSessions (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    Status nvarchar(40) NOT NULL,
+    ContinuationToken nvarchar(100) NOT NULL,
+    StepVersion int NOT NULL,
+    ChallengeId uniqueidentifier NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    VerifiedAtUtc datetime2 NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    ModifiedAtUtc datetime2 NOT NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    CONSTRAINT PK_MfaManagementSessions PRIMARY KEY (Id)
 );
 
-CREATE INDEX [IX_MfaLoginEnrollmentSessions_ChallengeId] ON [MfaLoginEnrollmentSessions] ([ChallengeId]);
+CREATE INDEX IX_MfaManagementSessions_UserId_Status_ExpiresAtUtc ON dbo.MfaManagementSessions (UserId, Status, ExpiresAtUtc);
+CREATE INDEX IX_MfaManagementSessions_ContinuationToken ON dbo.MfaManagementSessions (ContinuationToken);
+CREATE INDEX IX_MfaManagementSessions_ChallengeId ON dbo.MfaManagementSessions (ChallengeId);
 
-CREATE INDEX [IX_MfaLoginEnrollmentSessions_ContinuationToken] ON [MfaLoginEnrollmentSessions] ([ContinuationToken]);
-
-CREATE UNIQUE INDEX [IX_MfaLoginEnrollmentSessions_TokenJti] ON [MfaLoginEnrollmentSessions] ([TokenJti]);
-
-CREATE INDEX [IX_MfaLoginEnrollmentSessions_UserId_Status_ExpiresAtUtc] ON [MfaLoginEnrollmentSessions] ([UserId], [Status], [ExpiresAtUtc]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260714193858_AddLoginEnrollmentSessions', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-CREATE TABLE [MfaSessions] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [SessionType] nvarchar(40) NOT NULL,
-    [TokenJti] nvarchar(100) NOT NULL,
-    [ExpiresAtUtc] datetime2 NOT NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    [UpdatedAtUtc] datetime2 NOT NULL,
-    [Status] nvarchar(40) NULL,
-    [ContinuationToken] nvarchar(100) NULL,
-    [StepVersion] int NULL,
-    [ChallengeId] uniqueidentifier NULL,
-    [CompletedAtUtc] datetime2 NULL,
-    [MfaTransactionId] uniqueidentifier NULL,
-    [IssuedAtUtc] datetime2 NULL,
-    [ConsumedAtUtc] datetime2 NULL,
-    [RevokedAtUtc] datetime2 NULL,
-    [IpAddress] nvarchar(100) NULL,
-    [UserAgent] nvarchar(500) NULL,
-    CONSTRAINT [PK_MfaSessions] PRIMARY KEY ([Id]),
-    CONSTRAINT [CK_MfaSessions_SessionType] CHECK ([SessionType] IN ('temp_token', 'login_enrollment'))
+CREATE TABLE dbo.MfaSessions (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    SessionType nvarchar(40) NOT NULL,
+    TokenJti nvarchar(100) NOT NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    ModifiedAtUtc datetime2 NOT NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    Status nvarchar(40) NULL,
+    ContinuationToken nvarchar(100) NULL,
+    StepVersion int NULL,
+    ChallengeId uniqueidentifier NULL,
+    CompletedAtUtc datetime2 NULL,
+    MfaTransactionId uniqueidentifier NULL,
+    IssuedAtUtc datetime2 NULL,
+    ConsumedAtUtc datetime2 NULL,
+    RevokedAtUtc datetime2 NULL,
+    IpAddress nvarchar(100) NULL,
+    UserAgent nvarchar(500) NULL,
+    CONSTRAINT PK_MfaSessions PRIMARY KEY (Id),
+    CONSTRAINT CK_MfaSessions_SessionType CHECK ([SessionType] IN ('TempToken', 'LoginEnrollment'))
 );
 
-CREATE INDEX [IX_MfaSessions_ChallengeId] ON [MfaSessions] ([ChallengeId]);
+CREATE UNIQUE INDEX IX_MfaSessions_TokenJti ON dbo.MfaSessions (TokenJti);
+CREATE INDEX IX_MfaSessions_UserId_SessionType_ExpiresAtUtc ON dbo.MfaSessions (UserId, SessionType, ExpiresAtUtc);
+CREATE INDEX IX_MfaSessions_SessionType_Status_ExpiresAtUtc ON dbo.MfaSessions (SessionType, Status, ExpiresAtUtc);
+CREATE INDEX IX_MfaSessions_ContinuationToken ON dbo.MfaSessions (ContinuationToken);
+CREATE INDEX IX_MfaSessions_ChallengeId ON dbo.MfaSessions (ChallengeId);
+CREATE INDEX IX_MfaSessions_MfaTransactionId ON dbo.MfaSessions (MfaTransactionId);
 
-CREATE INDEX [IX_MfaSessions_ContinuationToken] ON [MfaSessions] ([ContinuationToken]);
-
-CREATE INDEX [IX_MfaSessions_MfaTransactionId] ON [MfaSessions] ([MfaTransactionId]);
-
-CREATE INDEX [IX_MfaSessions_SessionType_Status_ExpiresAtUtc] ON [MfaSessions] ([SessionType], [Status], [ExpiresAtUtc]);
-
-CREATE UNIQUE INDEX [IX_MfaSessions_TokenJti] ON [MfaSessions] ([TokenJti]);
-
-CREATE INDEX [IX_MfaSessions_UserId_SessionType_ExpiresAtUtc] ON [MfaSessions] ([UserId], [SessionType], [ExpiresAtUtc]);
-
-
-INSERT INTO MfaSessions
-(
-    Id,
-    UserId,
-    SessionType,
-    TokenJti,
-    ExpiresAtUtc,
-    CreatedAtUtc,
-    UpdatedAtUtc,
-    Status,
-    ContinuationToken,
-    StepVersion,
-    ChallengeId,
-    CompletedAtUtc,
-    MfaTransactionId,
-    IssuedAtUtc,
-    ConsumedAtUtc,
-    RevokedAtUtc,
-    IpAddress,
-    UserAgent
-)
-SELECT
-    Id,
-    UserId,
-    'login_enrollment',
-    TokenJti,
-    ExpiresAtUtc,
-    CreatedAtUtc,
-    UpdatedAtUtc,
-    Status,
-    ContinuationToken,
-    StepVersion,
-    ChallengeId,
-    CompletedAtUtc,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
-FROM MfaLoginEnrollmentSessions;
-
-INSERT INTO MfaSessions
-(
-    Id,
-    UserId,
-    SessionType,
-    TokenJti,
-    ExpiresAtUtc,
-    CreatedAtUtc,
-    UpdatedAtUtc,
-    Status,
-    ContinuationToken,
-    StepVersion,
-    ChallengeId,
-    CompletedAtUtc,
-    MfaTransactionId,
-    IssuedAtUtc,
-    ConsumedAtUtc,
-    RevokedAtUtc,
-    IpAddress,
-    UserAgent
-)
-SELECT
-    Id,
-    UserId,
-    'temp_token',
-    TokenJti,
-    ExpiresAtUtc,
-    IssuedAtUtc,
-    IssuedAtUtc,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    MfaTransactionId,
-    IssuedAtUtc,
-    ConsumedAtUtc,
-    RevokedAtUtc,
-    IpAddress,
-    UserAgent
-FROM MfaTempTokenSessions;
-
-DROP TABLE MfaLoginEnrollmentSessions;
-DROP TABLE MfaTempTokenSessions;
-
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260715203148_ConsolidateMfaSessionTables', N'10.0.9');
-
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-ALTER TABLE [MfaChallenges] ADD [FailedAttempts] int NOT NULL DEFAULT 0;
-
-ALTER TABLE [MfaChallenges] ADD [LastFailedAttemptAtUtc] datetime2 NULL;
-
-CREATE TABLE [RefreshTokenSessions] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [TokenHash] nvarchar(256) NOT NULL,
-    [AccessTokenSessionId] uniqueidentifier NOT NULL,
-    [IssuedAtUtc] datetime2 NOT NULL,
-    [ExpiresAtUtc] datetime2 NOT NULL,
-    [RevokedAtUtc] datetime2 NULL,
-    [RevokeReason] nvarchar(100) NULL,
-    [LastRotatedAtUtc] datetime2 NULL,
-    [PreviousTokenSessionId] uniqueidentifier NULL,
-    [IpAddress] nvarchar(100) NULL,
-    [UserAgent] nvarchar(500) NULL,
-    CONSTRAINT [PK_RefreshTokenSessions] PRIMARY KEY ([Id])
+CREATE TABLE dbo.Fido2Transactions (
+    Id uniqueidentifier NOT NULL,
+    UserId bigint NOT NULL,
+    Type nvarchar(50) NOT NULL,
+    OptionsJson nvarchar(max) NOT NULL,
+    IsUsed bit NOT NULL,
+    IpAddress nvarchar(100) NOT NULL,
+    UserAgent nvarchar(500) NOT NULL,
+    CreatedAtUtc datetime2 NOT NULL,
+    CreatedBy nvarchar(450) NULL,
+    ModifiedBy nvarchar(450) NULL,
+    ExpiresAtUtc datetime2 NOT NULL,
+    ParentMfaTransactionId uniqueidentifier NULL,
+    CONSTRAINT PK_Fido2Transactions PRIMARY KEY (Id)
 );
 
-CREATE INDEX [IX_RefreshTokenSessions_AccessTokenSessionId] ON [RefreshTokenSessions] ([AccessTokenSessionId]);
+CREATE INDEX IX_Fido2Transactions_UserId_Type_IsUsed ON dbo.Fido2Transactions (UserId, Type, IsUsed);
 
-CREATE INDEX [IX_RefreshTokenSessions_PreviousTokenSessionId] ON [RefreshTokenSessions] ([PreviousTokenSessionId]);
+ALTER TABLE dbo.UserRecoveryCodeBatches
+    ADD CONSTRAINT FK_UserRecoveryCodeBatches_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-CREATE UNIQUE INDEX [IX_RefreshTokenSessions_TokenHash] ON [RefreshTokenSessions] ([TokenHash]);
+ALTER TABLE dbo.UserRecoveryCodes
+    ADD CONSTRAINT FK_UserRecoveryCodes_UserRecoveryCodeBatches_BatchId
+    FOREIGN KEY (BatchId) REFERENCES dbo.UserRecoveryCodeBatches (Id) ON DELETE NO ACTION;
 
-CREATE INDEX [IX_RefreshTokenSessions_UserId_ExpiresAtUtc_RevokedAtUtc] ON [RefreshTokenSessions] ([UserId], [ExpiresAtUtc], [RevokedAtUtc]);
+ALTER TABLE dbo.UserRecoveryCodes
+    ADD CONSTRAINT FK_UserRecoveryCodes_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260716205914_updateSchema', N'10.0.9');
+ALTER TABLE dbo.UserFido2Credentials
+    ADD CONSTRAINT FK_UserFido2Credentials_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-COMMIT;
-GO
+ALTER TABLE dbo.UserMfaMethods
+    ADD CONSTRAINT FK_UserMfaMethods_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-BEGIN TRANSACTION;
-CREATE TABLE [MfaLoginEnrollmentSessions] (
-    [Id] uniqueidentifier NOT NULL,
-    [UserId] bigint NOT NULL,
-    [Status] nvarchar(max) NOT NULL,
-    [ContinuationToken] nvarchar(max) NOT NULL,
-    [StepVersion] int NOT NULL,
-    [TokenJti] nvarchar(max) NOT NULL,
-    [ChallengeId] uniqueidentifier NULL,
-    [ExpiresAtUtc] datetime2 NOT NULL,
-    [CompletedAtUtc] datetime2 NULL,
-    [CreatedAtUtc] datetime2 NOT NULL,
-    [UpdatedAtUtc] datetime2 NOT NULL,
-    CONSTRAINT [PK_MfaLoginEnrollmentSessions] PRIMARY KEY ([Id])
-);
+ALTER TABLE dbo.AccessTokenSessions
+    ADD CONSTRAINT FK_AccessTokenSessions_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-CREATE INDEX [IX_UserMfaMethods_Method_ContactValue_Active] ON [UserMfaMethods] ([Method], [ContactValue]) WHERE [IsEnabled] = 1;
+ALTER TABLE dbo.RefreshTokenSessions
+    ADD CONSTRAINT FK_RefreshTokenSessions_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260716225430_AddMfaMethodContactValueIndex', N'10.0.9');
+ALTER TABLE dbo.RefreshTokenSessions
+    ADD CONSTRAINT FK_RefreshTokenSessions_AccessTokenSessions_AccessTokenSessionId
+    FOREIGN KEY (AccessTokenSessionId) REFERENCES dbo.AccessTokenSessions (Id) ON DELETE NO ACTION;
 
-COMMIT;
-GO
+ALTER TABLE dbo.RefreshTokenSessions
+    ADD CONSTRAINT FK_RefreshTokenSessions_RefreshTokenSessions_PreviousTokenSessionId
+    FOREIGN KEY (PreviousTokenSessionId) REFERENCES dbo.RefreshTokenSessions (Id) ON DELETE NO ACTION;
 
-BEGIN TRANSACTION;
-DROP INDEX [IX_AccessTokenSessions_UserId_ExpiresAtUtc] ON [AccessTokenSessions];
+ALTER TABLE dbo.MfaChallenges
+    ADD CONSTRAINT FK_MfaChallenges_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-CREATE INDEX [IX_SecurityAuditEvents_Severity_OccurredAtUtc] ON [SecurityAuditEvents] ([Severity], [OccurredAtUtc]);
+ALTER TABLE dbo.MfaTempTokenSessions
+    ADD CONSTRAINT FK_MfaTempTokenSessions_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-CREATE INDEX [IX_RefreshTokenSessions_Active] ON [RefreshTokenSessions] ([UserId], [ExpiresAtUtc]) WHERE [RevokedAtUtc] IS NULL;
+ALTER TABLE dbo.MfaTempTokenSessions
+    ADD CONSTRAINT FK_MfaTempTokenSessions_MfaChallenges_MfaTransactionId
+    FOREIGN KEY (MfaTransactionId) REFERENCES dbo.MfaChallenges (Id) ON DELETE NO ACTION;
 
-CREATE INDEX [IX_MfaChallenges_Status_CreatedAtUtc] ON [MfaChallenges] ([Status], [CreatedAtUtc]);
+ALTER TABLE dbo.MfaLoginEnrollmentSessions
+    ADD CONSTRAINT FK_MfaLoginEnrollmentSessions_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-CREATE INDEX [IX_AuthenticationAuditEvents_Stage_OccurredAtUtc] ON [AuthenticationAuditEvents] ([Stage], [OccurredAtUtc]);
+ALTER TABLE dbo.MfaManagementSessions
+    ADD CONSTRAINT FK_MfaManagementSessions_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-CREATE INDEX [IX_AccessTokenSessions_Active] ON [AccessTokenSessions] ([UserId], [ExpiresAtUtc]) WHERE [RevokedAtUtc] IS NULL;
+ALTER TABLE dbo.MfaSessions
+    ADD CONSTRAINT FK_MfaSessions_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260716231259_AddPerformanceIndexes', N'10.0.9');
+ALTER TABLE dbo.Fido2Transactions
+    ADD CONSTRAINT FK_Fido2Transactions_Users_UserId
+    FOREIGN KEY (UserId) REFERENCES dbo.Users (Id) ON DELETE NO ACTION;
 
-COMMIT;
-GO
-
-BEGIN TRANSACTION;
-ALTER TABLE [UserFido2Credentials] DROP CONSTRAINT [FK_UserFido2Credentials_Users_UserId];
-
-ALTER TABLE [UserRecoveryCodes] DROP CONSTRAINT [FK_UserRecoveryCodes_UserRecoveryCodeBatches_BatchId];
-
-EXEC sp_rename N'[UserMfaMethods].[UpdatedAtUtc]', N'ModifiedAtUtc', 'COLUMN';
-
-EXEC sp_rename N'[MfaSessions].[UpdatedAtUtc]', N'ModifiedAtUtc', 'COLUMN';
-
-EXEC sp_rename N'[MfaManagementSessions].[UpdatedAtUtc]', N'ModifiedAtUtc', 'COLUMN';
-
-EXEC sp_rename N'[MfaLoginEnrollmentSessions].[UpdatedAtUtc]', N'ModifiedAtUtc', 'COLUMN';
-
-ALTER TABLE [Users] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [Users] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [UserRecoveryCodes] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [UserRecoveryCodes] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [UserRecoveryCodeBatches] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [UserRecoveryCodeBatches] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [UserMfaMethods] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [UserMfaMethods] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [UserFido2Credentials] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [UserFido2Credentials] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [RefreshTokenSessions] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [RefreshTokenSessions] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [MfaSessions] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [MfaSessions] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [MfaManagementSessions] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [MfaManagementSessions] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [MfaLoginEnrollmentSessions] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [MfaLoginEnrollmentSessions] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [MfaChallenges] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [MfaChallenges] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [Fido2Transactions] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [Fido2Transactions] ADD [ModifiedBy] nvarchar(max) NULL;
-
-ALTER TABLE [AccessTokenSessions] ADD [CreatedBy] nvarchar(max) NULL;
-
-ALTER TABLE [AccessTokenSessions] ADD [ModifiedBy] nvarchar(max) NULL;
-
-UPDATE [Users] SET [CreatedBy] = NULL, [ModifiedBy] = NULL
-WHERE [Id] = CAST(1 AS bigint);
-SELECT @@ROWCOUNT;
-
-
-ALTER TABLE [UserFido2Credentials] ADD CONSTRAINT [FK_UserFido2Credentials_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]);
-
-ALTER TABLE [UserRecoveryCodes] ADD CONSTRAINT [FK_UserRecoveryCodes_UserRecoveryCodeBatches_BatchId] FOREIGN KEY ([BatchId]) REFERENCES [UserRecoveryCodeBatches] ([Id]);
-
-INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-VALUES (N'20260720200751_AddAuditColumnsAndNoCascade', N'10.0.9');
+ALTER TABLE dbo.Fido2Transactions
+    ADD CONSTRAINT FK_Fido2Transactions_MfaChallenges_ParentMfaTransactionId
+    FOREIGN KEY (ParentMfaTransactionId) REFERENCES dbo.MfaChallenges (Id) ON DELETE NO ACTION;
 
 COMMIT;
-GO
-

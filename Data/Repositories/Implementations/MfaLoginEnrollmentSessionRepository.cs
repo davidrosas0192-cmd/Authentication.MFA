@@ -66,7 +66,7 @@ public class MfaLoginEnrollmentSessionRepository : IMfaLoginEnrollmentSessionRep
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task RevokeAllActiveByUserAsync(long userId, CancellationToken cancellationToken)
+    public async Task RevokeAllActiveByUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
         var sessions = await _context.MfaLoginEnrollmentSessions

@@ -13,7 +13,7 @@ public class UserMfaMethodRepository : IUserMfaMethodRepository
         _context = context;
     }
 
-    public Task<List<UserMfaMethod>> GetEnabledByUserIdAsync(long userId, CancellationToken cancellationToken)
+    public Task<List<UserMfaMethod>> GetEnabledByUserIdAsync(Guid userId, CancellationToken cancellationToken)
     {
         return _context
             .UserMfaMethods.AsNoTracking()
@@ -21,7 +21,7 @@ public class UserMfaMethodRepository : IUserMfaMethodRepository
             .ToListAsync(cancellationToken);
     }
 
-    public Task<List<UserMfaMethod>> GetByUserIdAsync(long userId, CancellationToken cancellationToken)
+    public Task<List<UserMfaMethod>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken)
     {
         return _context
             .UserMfaMethods.AsNoTracking()
@@ -30,7 +30,7 @@ public class UserMfaMethodRepository : IUserMfaMethodRepository
     }
 
     public Task<UserMfaMethod?> GetEnabledByUserIdAndMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CancellationToken cancellationToken
     )
@@ -42,7 +42,7 @@ public class UserMfaMethodRepository : IUserMfaMethodRepository
     }
 
     public Task<UserMfaMethod?> GetByUserIdAndMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CancellationToken cancellationToken
     )
@@ -56,7 +56,7 @@ public class UserMfaMethodRepository : IUserMfaMethodRepository
     public Task<bool> IsContactValueInUseAsync(
         string contactValue,
         string method,
-        long excludeUserId,
+        Guid excludeUserId,
         CancellationToken cancellationToken
     )
     {

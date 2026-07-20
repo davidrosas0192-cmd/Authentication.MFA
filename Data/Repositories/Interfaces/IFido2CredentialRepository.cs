@@ -5,7 +5,7 @@ namespace Authentication.Fido2.Data.Repositories.Interfaces;
 public interface IFido2CredentialRepository
 {
     Task<List<UserFido2Credential>> GetByUserIdAsync(
-        long userId,
+        Guid userId,
         CancellationToken cancellationToken
     );
 

@@ -3,7 +3,7 @@ namespace Authentication.Fido2.Entities;
 public class MfaChallenge
 {
     public Guid Id { get; set; }
-    public long UserId { get; set; }
+    public Guid UserId { get; set; }
     public string Purpose { get; set; } = default!;
     public string ContinuationToken { get; set; } = default!;
     public int StepVersion { get; set; }

@@ -76,7 +76,7 @@ public class Fido2MfaService : IFido2MfaService
     }
 
     public async Task<Result<Fido2OptionsResponse>> CreateEnrollmentOptionsAsync(
-        long userId,
+        Guid userId,
         string ipAddress,
         string userAgent,
         CancellationToken cancellationToken
@@ -224,7 +224,7 @@ public class Fido2MfaService : IFido2MfaService
 
     public async Task<Result<CompleteFido2EnrollmentResponse>> CompleteEnrollmentAsync(
         CompleteFido2EnrollmentRequest request,
-        long userId,
+        Guid userId,
         CancellationToken cancellationToken
     )
     {
@@ -383,7 +383,7 @@ public class Fido2MfaService : IFido2MfaService
     }
 
     public async Task<Result<Fido2OptionsResponse>> CreateLoginOptionsAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string ipAddress,
         string userAgent,
@@ -528,7 +528,7 @@ public class Fido2MfaService : IFido2MfaService
 
     public async Task<Result<LoginResponse>> CompleteLoginAsync(
         CompleteFido2LoginRequest request,
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         CancellationToken cancellationToken
     )
@@ -754,7 +754,7 @@ public class Fido2MfaService : IFido2MfaService
         return null;
     }
 
-    private async Task<List<string>> EnsureRecoveryCodesIssuedAsync(long userId, CancellationToken cancellationToken)
+    private async Task<List<string>> EnsureRecoveryCodesIssuedAsync(Guid userId, CancellationToken cancellationToken)
     {
         var (existingBatch, _) = await _userRecoveryCodeRepository.GetStatusAsync(userId, cancellationToken);
         if (existingBatch is not null)

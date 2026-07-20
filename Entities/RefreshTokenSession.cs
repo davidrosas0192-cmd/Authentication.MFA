@@ -3,7 +3,7 @@ namespace Authentication.Fido2.Entities;
 public class RefreshTokenSession
 {
     public Guid Id { get; set; }
-    public long UserId { get; set; }
+    public Guid UserId { get; set; }
     public string TokenHash { get; set; } = default!;
     public Guid AccessTokenSessionId { get; set; }
     public DateTime IssuedAtUtc { get; set; }

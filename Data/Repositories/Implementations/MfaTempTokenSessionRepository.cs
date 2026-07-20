@@ -130,7 +130,7 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken)
+    public async Task RevokeAllActiveByUserAsync(Guid userId, string reason, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
 

@@ -23,7 +23,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -61,7 +61,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -106,7 +106,7 @@ public class MfaControllerTests
         {
             ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaTempTokenSession
         {
-            UserId = 42,
+            UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
             MfaTransactionId = transactionId,
             TokenJti = tokenJti,
             IssuedAtUtc = DateTime.UtcNow,
@@ -119,7 +119,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, transactionId, "mfa", tokenJti)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), transactionId, "mfa", tokenJti)),
             },
         };
 
@@ -127,7 +127,7 @@ public class MfaControllerTests
 
         Assert.IsType<OkObjectResult>(result);
         Assert.Equal(1, service.StartChallengeCallCount);
-        Assert.Equal(42, service.LastUserId);
+        Assert.Equal(Guid.Parse("44444444-4444-4444-4444-444444444444"), service.LastUserId);
         Assert.Equal(transactionId, service.LastMfaTransactionId);
         Assert.Equal("sms", service.LastMethod);
         Assert.Equal("mfa-jti-1", repo.LastJti);
@@ -145,7 +145,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, transactionId, "mfa", tokenJti)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), transactionId, "mfa", tokenJti)),
             },
         };
 
@@ -174,7 +174,7 @@ public class MfaControllerTests
         {
             ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaTempTokenSession
         {
-            UserId = 42,
+            UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
             MfaTransactionId = transactionId,
             TokenJti = tokenJti,
             IssuedAtUtc = DateTime.UtcNow,
@@ -186,7 +186,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, transactionId, "mfa", tokenJti)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), transactionId, "mfa", tokenJti)),
             },
         };
 
@@ -228,7 +228,7 @@ public class MfaControllerTests
         {
             ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaTempTokenSession
             {
-                UserId = 42,
+                UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
                 MfaTransactionId = transactionId,
                 TokenJti = tokenJti,
                 IssuedAtUtc = DateTime.UtcNow,
@@ -240,7 +240,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, transactionId, "mfa", tokenJti)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), transactionId, "mfa", tokenJti)),
             },
         };
 
@@ -262,7 +262,7 @@ public class MfaControllerTests
         {
             VerifyChallengeResultToReturn = Result<LoginResponse>.Failure(
                 "RATE_LIMITED",
-                StatusCodes.Status429TooManyRequests
+                StatusCodes.StatusGuid.Parse("44444444-4444-4444-4444-444444444444")9TooManyRequests
             ),
         };
 
@@ -270,7 +270,7 @@ public class MfaControllerTests
         {
             ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaTempTokenSession
             {
-                UserId = 42,
+                UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
                 MfaTransactionId = transactionId,
                 TokenJti = tokenJti,
                 IssuedAtUtc = DateTime.UtcNow,
@@ -291,7 +291,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, transactionId, "mfa", tokenJti)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), transactionId, "mfa", tokenJti)),
             },
         };
 
@@ -301,7 +301,7 @@ public class MfaControllerTests
         );
 
         var objectResult = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(StatusCodes.Status429TooManyRequests, objectResult.StatusCode);
+        Assert.Equal(StatusCodes.StatusGuid.Parse("44444444-4444-4444-4444-444444444444")9TooManyRequests, objectResult.StatusCode);
         Assert.True(controller.Response.Headers.TryGetValue("Retry-After", out var retryAfter));
         Assert.Equal("61", retryAfter.ToString());
     }
@@ -325,7 +325,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -382,7 +382,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -411,7 +411,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -441,7 +441,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -476,7 +476,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -506,7 +506,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -537,7 +537,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -566,7 +566,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -597,7 +597,7 @@ public class MfaControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -635,7 +635,7 @@ public class MfaControllerTests
             ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaLoginEnrollmentSession
             {
                 Id = sessionId,
-                UserId = 42,
+                UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
                 TokenJti = tokenJti,
                 Status = "enrollment_required",
                 ContinuationToken = "session-ct-1",
@@ -648,7 +648,7 @@ public class MfaControllerTests
             ControllerContext = new ControllerContext
             {
                 HttpContext = ControllerTestHelpers.CreateHttpContext(
-                    ControllerTestHelpers.CreateUserPrincipal(42, enrollmentSessionId: sessionId, tokenType: "login_enrollment", tokenJti: tokenJti)
+                    ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), enrollmentSessionId: sessionId, tokenType: "login_enrollment", tokenJti: tokenJti)
                 ),
             },
         };
@@ -690,7 +690,7 @@ public class MfaControllerTests
             ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaLoginEnrollmentSession
             {
                 Id = sessionId,
-                UserId = 42,
+                UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
                 TokenJti = tokenJti,
                 Status = "enrollment_in_progress",
                 ContinuationToken = "session-ct-2",
@@ -703,7 +703,7 @@ public class MfaControllerTests
             ControllerContext = new ControllerContext
             {
                 HttpContext = ControllerTestHelpers.CreateHttpContext(
-                    ControllerTestHelpers.CreateUserPrincipal(42, enrollmentSessionId: sessionId, tokenType: "login_enrollment", tokenJti: tokenJti)
+                    ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), enrollmentSessionId: sessionId, tokenType: "login_enrollment", tokenJti: tokenJti)
                 ),
             },
         };

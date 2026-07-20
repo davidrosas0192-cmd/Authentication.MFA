@@ -7,7 +7,7 @@ public interface IMonitorService
     Task<MonitorSummaryResponse> GetSummaryAsync(CancellationToken cancellationToken);
 
     Task<PagedResponse<LoginHistoryItem>> GetLoginsAsync(
-        long? userId,
+        Guid? userId,
         string? outcome,
         string? method,
         DateTime? dateFrom,
@@ -19,7 +19,7 @@ public interface IMonitorService
 
     Task<PagedResponse<EnrollmentItem>> GetEnrollmentsAsync(
         string? status,
-        long? userId,
+        Guid? userId,
         DateTime? dateFrom,
         DateTime? dateTo,
         int page,
@@ -31,7 +31,7 @@ public interface IMonitorService
         string? status,
         string? purpose,
         string? method,
-        long? userId,
+        Guid? userId,
         DateTime? dateFrom,
         DateTime? dateTo,
         int page,
@@ -40,7 +40,7 @@ public interface IMonitorService
     );
 
     Task<PagedResponse<SessionItem>> GetSessionsAsync(
-        long? userId,
+        Guid? userId,
         string? type,
         bool onlyActive,
         int page,
@@ -53,7 +53,7 @@ public interface IMonitorService
         string? category,
         string? eventType,
         string? outcome,
-        long? userId,
+        Guid? userId,
         DateTime? dateFrom,
         DateTime? dateTo,
         int page,

@@ -3,7 +3,7 @@ namespace Authentication.Fido2.Entities;
 public class UserMfaMethod
 {
     public long Id { get; set; }
-    public long UserId { get; set; }
+    public Guid UserId { get; set; }
     public string Method { get; set; } = default!;
     public bool IsEnabled { get; set; } = true;
     public bool IsPrimary { get; set; }

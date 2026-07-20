@@ -41,7 +41,7 @@ public class AccessTokenSessionRepository : IAccessTokenSessionRepository
                 .SetProperty(x => x.RevokeReason, reason), cancellationToken);
     }
 
-    public async Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken)
+    public async Task RevokeAllActiveByUserAsync(Guid userId, string reason, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
         await _context.AccessTokenSessions

@@ -29,7 +29,7 @@ public class Fido2ControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -37,7 +37,7 @@ public class Fido2ControllerTests
 
         Assert.IsType<OkObjectResult>(result);
         Assert.Equal(1, service.CreateEnrollmentOptionsCallCount);
-        Assert.Equal(42, service.LastUserId);
+        Assert.Equal(Guid.Parse("44444444-4444-4444-4444-444444444444"), service.LastUserId);
         Assert.Equal("127.0.0.1", service.LastIpAddress);
     }
 
@@ -70,7 +70,7 @@ public class Fido2ControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"))),
             },
         };
 
@@ -112,7 +112,7 @@ public class Fido2ControllerTests
         {
             ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaTempTokenSession
         {
-            UserId = 42,
+            UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
             MfaTransactionId = transactionId,
             TokenJti = tokenJti,
             IssuedAtUtc = DateTime.UtcNow,
@@ -124,7 +124,7 @@ public class Fido2ControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, transactionId, "mfa", tokenJti)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), transactionId, "mfa", tokenJti)),
             },
         };
 
@@ -132,7 +132,7 @@ public class Fido2ControllerTests
 
         Assert.IsType<OkObjectResult>(result);
         Assert.Equal(1, service.CreateLoginOptionsCallCount);
-        Assert.Equal(42, service.LastUserId);
+        Assert.Equal(Guid.Parse("44444444-4444-4444-4444-444444444444"), service.LastUserId);
         Assert.Equal(transactionId, service.LastMfaTransactionId);
     }
 
@@ -169,7 +169,7 @@ public class Fido2ControllerTests
         {
             ActiveSessionToReturn = new Authentication.Fido2.Entities.MfaTempTokenSession
         {
-            UserId = 42,
+            UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
             MfaTransactionId = transactionId,
             TokenJti = tokenJti,
             IssuedAtUtc = DateTime.UtcNow,
@@ -181,7 +181,7 @@ public class Fido2ControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, transactionId, "mfa", tokenJti)),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), transactionId, "mfa", tokenJti)),
             },
         };
 

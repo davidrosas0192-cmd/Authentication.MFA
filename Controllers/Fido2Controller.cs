@@ -165,7 +165,7 @@ public class Fido2Controller : ApiControllerBase
     // NOTE: This method performs an additional DB session lookup (GetActiveByJtiAsync) to prevent
     // token replay attacks — Fido2Controller is the one that issues the final access token.
     // Do NOT merge with MfaController.ValidateMfaTokenContext — they have different security requirements.
-    private async Task<(long UserId, Guid MfaTransactionId, IActionResult? ErrorResult)> ValidateMfaTokenContext(
+    private async Task<(Guid UserId, Guid MfaTransactionId, IActionResult? ErrorResult)> ValidateMfaTokenContext(
         CancellationToken cancellationToken
     )
     {
@@ -193,7 +193,7 @@ public class Fido2Controller : ApiControllerBase
                 cancellationToken
             );
 
-            return (0, Guid.Empty, UnauthorizedProblem("Invalid MFA token."));
+            return (Guid.Empty, Guid.Empty, UnauthorizedProblem("Invalid MFA token."));
 
         }
 
@@ -216,7 +216,7 @@ public class Fido2Controller : ApiControllerBase
                 cancellationToken
             );
 
-            return (0, Guid.Empty, UnauthorizedProblem("MFA token is expired or not valid."));
+            return (Guid.Empty, Guid.Empty, UnauthorizedProblem("MFA token is expired or not valid."));
         }
 
         return (userId, mfaTransactionId, null);

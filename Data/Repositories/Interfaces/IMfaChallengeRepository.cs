@@ -8,7 +8,7 @@ public interface IMfaChallengeRepository
     Task<MfaChallenge?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task UpdateAsync(MfaChallenge challenge, CancellationToken cancellationToken);
     Task<bool> HasRecentVerifiedChallengeAsync(
-        long userId,
+        Guid userId,
         string purpose,
         DateTime sinceUtc,
         CancellationToken cancellationToken

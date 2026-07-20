@@ -3,7 +3,7 @@ namespace Authentication.Fido2.Entities;
 public class MfaTempTokenSession
 {
     public Guid Id { get; set; }
-    public long UserId { get; set; }
+    public Guid UserId { get; set; }
     public Guid MfaTransactionId { get; set; }
     public string TokenJti { get; set; } = default!;
     public DateTime IssuedAtUtc { get; set; }

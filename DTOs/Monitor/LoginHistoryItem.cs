@@ -4,7 +4,7 @@ public class LoginHistoryItem
 {
     public long Id { get; set; }
     public DateTime OccurredAtUtc { get; set; }
-    public long? UserId { get; set; }
+    public Guid? UserId { get; set; }
     public string? UsernameOrEmail { get; set; }
     public string Stage { get; set; } = default!;
     public string Method { get; set; } = default!;

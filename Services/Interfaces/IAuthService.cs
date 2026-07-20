@@ -12,9 +12,9 @@ public interface IAuthService
         CancellationToken cancellationToken
     );
 
-    Task<Result> LogoutAsync(long userId, string tokenJti, CancellationToken cancellationToken);
+    Task<Result> LogoutAsync(Guid userId, string tokenJti, CancellationToken cancellationToken);
 
-    Task<Result> CancelAuthenticationAsync(long userId, string tokenJti, CancellationToken cancellationToken);
+    Task<Result> CancelAuthenticationAsync(Guid userId, string tokenJti, CancellationToken cancellationToken);
 
     Task<Result<LoginResponse>> RefreshTokenAsync(
         string refreshToken,

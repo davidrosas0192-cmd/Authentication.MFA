@@ -56,7 +56,7 @@ public class RefreshTokenSessionRepository : IRefreshTokenSessionRepository
         }
     }
 
-    public async Task RevokeAllByUserAsync(long userId, string reason, CancellationToken cancellationToken)
+    public async Task RevokeAllByUserAsync(Guid userId, string reason, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
         await _context.RefreshTokenSessions
@@ -66,7 +66,7 @@ public class RefreshTokenSessionRepository : IRefreshTokenSessionRepository
                 .SetProperty(x => x.RevokeReason, reason), cancellationToken);
     }
 
-    public async Task<List<RefreshTokenSession>> GetActiveByUserAsync(long userId, CancellationToken cancellationToken)
+    public async Task<List<RefreshTokenSession>> GetActiveByUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
         return await _context.RefreshTokenSessions
@@ -76,7 +76,7 @@ public class RefreshTokenSessionRepository : IRefreshTokenSessionRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<bool> HasActiveTokenAsync(long userId, CancellationToken cancellationToken)
+    public async Task<bool> HasActiveTokenAsync(Guid userId, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
         return await _context.RefreshTokenSessions.AnyAsync(

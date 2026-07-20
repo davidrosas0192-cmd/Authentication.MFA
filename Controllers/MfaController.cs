@@ -514,7 +514,7 @@ public class MfaController : ApiControllerBase
     // DB session lookup is intentionally omitted here — endpoints in this controller do not
     // issue access tokens directly (VerifyChallenge delegates that to MfaService).
     // Do NOT merge with Fido2Controller.ValidateMfaTokenContext — they have different security requirements.
-    private async Task<(long UserId, Guid MfaTransactionId, IActionResult? ErrorResult)> ValidateMfaTokenContext(
+    private async Task<(Guid UserId, Guid MfaTransactionId, IActionResult? ErrorResult)> ValidateMfaTokenContext(
         CancellationToken cancellationToken
     )
     {
@@ -536,13 +536,13 @@ public class MfaController : ApiControllerBase
                 cancellationToken
             );
 
-            return (0, Guid.Empty, UnauthorizedProblem("Invalid MFA context."));
+            return (Guid.Empty, Guid.Empty, UnauthorizedProblem("Invalid MFA context."));
         }
 
         return (userId, mfaTransactionId, null);
     }
 
-    private async Task<(long UserId, Guid EnrollmentSessionId, IActionResult? ErrorResult)> ValidateLoginEnrollmentTokenContext(
+    private async Task<(Guid UserId, Guid EnrollmentSessionId, IActionResult? ErrorResult)> ValidateLoginEnrollmentTokenContext(
         CancellationToken cancellationToken
     )
     {
@@ -564,7 +564,7 @@ public class MfaController : ApiControllerBase
                 cancellationToken
             );
 
-            return (0, Guid.Empty, UnauthorizedProblem("Invalid enrollment context."));
+            return (Guid.Empty, Guid.Empty, UnauthorizedProblem("Invalid enrollment context."));
         }
 
         return (userId, enrollmentSessionId, null);
@@ -582,6 +582,6 @@ public class MfaController : ApiControllerBase
 
         public Task UpdateAsync(Entities.MfaLoginEnrollmentSession session, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task RevokeAllActiveByUserAsync(long userId, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task RevokeAllActiveByUserAsync(Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

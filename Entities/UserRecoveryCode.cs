@@ -4,7 +4,7 @@ public class UserRecoveryCode
 {
     public Guid Id { get; set; }
     public Guid BatchId { get; set; }
-    public long UserId { get; set; }
+    public Guid UserId { get; set; }
     public string CodeHash { get; set; } = default!;
     public DateTime CreatedAtUtc { get; set; }
     public string? CreatedBy { get; set; }

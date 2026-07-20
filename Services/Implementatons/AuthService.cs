@@ -317,7 +317,7 @@ public class AuthService : IAuthService
     }
 
     public async Task<Result> LogoutAsync(
-        long userId,
+        Guid userId,
         string tokenJti,
         CancellationToken cancellationToken
     )
@@ -341,7 +341,7 @@ public class AuthService : IAuthService
     }
 
     public async Task<Result> CancelAuthenticationAsync(
-        long userId,
+        Guid userId,
         string tokenJti,
         CancellationToken cancellationToken
     )

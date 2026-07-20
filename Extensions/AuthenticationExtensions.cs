@@ -58,7 +58,7 @@ public static class AuthenticationExtensions
                             ?? context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                         var tokenJti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
 
-                        if (!long.TryParse(userIdValue, out var userId) || string.IsNullOrWhiteSpace(tokenJti))
+                        if (!Guid.TryParse(userIdValue, out var userId) || string.IsNullOrWhiteSpace(tokenJti))
                         {
                             context.Fail("Invalid token claims.");
                             return;

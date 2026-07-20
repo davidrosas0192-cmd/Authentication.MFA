@@ -106,13 +106,13 @@ public abstract class ApiControllerBase : ControllerBase
         return BadRequest(badRequest);
     }
 
-    protected static bool TryGetUserId(ClaimsPrincipal user, out long userId)
+    protected static bool TryGetUserId(ClaimsPrincipal user, out Guid userId)
     {
         var value = user.FindFirst("sub")?.Value
             ?? user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
             ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        return long.TryParse(value, out userId);
+        return Guid.TryParse(value, out userId);
     }
 
     protected static IActionResult UnauthorizedProblem(string detail) =>

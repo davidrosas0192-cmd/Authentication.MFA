@@ -3,7 +3,7 @@ namespace Authentication.Fido2.DTOs.Monitor;
 public class ChallengeItem
 {
     public Guid Id { get; set; }
-    public long UserId { get; set; }
+    public Guid UserId { get; set; }
     public string Purpose { get; set; } = default!;
     public string? Method { get; set; }
     public string? Channel { get; set; }

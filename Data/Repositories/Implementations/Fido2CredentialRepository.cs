@@ -14,7 +14,7 @@ public class Fido2CredentialRepository : IFido2CredentialRepository
     }
 
     public Task<List<UserFido2Credential>> GetByUserIdAsync(
-        long userId,
+        Guid userId,
         CancellationToken cancellationToken
     )
     {

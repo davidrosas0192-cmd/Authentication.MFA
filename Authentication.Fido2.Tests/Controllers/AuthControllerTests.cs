@@ -76,7 +76,7 @@ public class AuthControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, tokenJti: "jti-logout")),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), tokenJti: "jti-logout")),
             },
         };
 
@@ -84,7 +84,7 @@ public class AuthControllerTests
 
         Assert.IsType<OkObjectResult>(result);
         Assert.Equal(1, service.LogoutCallCount);
-        Assert.Equal(42, service.LastLogoutUserId);
+        Assert.Equal(Guid.Parse("44444444-4444-4444-4444-444444444444"), service.LastLogoutUserId);
         Assert.Equal("jti-logout", service.LastLogoutJti);
     }
 
@@ -115,7 +115,7 @@ public class AuthControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(42, tokenJti: "mfa-jti")),
+                HttpContext = ControllerTestHelpers.CreateHttpContext(ControllerTestHelpers.CreateUserPrincipal(Guid.Parse("44444444-4444-4444-4444-444444444444"), tokenJti: "mfa-jti")),
             },
         };
 
@@ -123,7 +123,7 @@ public class AuthControllerTests
 
         Assert.IsType<OkObjectResult>(result);
         Assert.Equal(1, service.CancelAuthenticationCallCount);
-        Assert.Equal(42, service.LastCancelUserId);
+        Assert.Equal(Guid.Parse("44444444-4444-4444-4444-444444444444"), service.LastCancelUserId);
         Assert.Equal("mfa-jti", service.LastCancelJti);
     }
 

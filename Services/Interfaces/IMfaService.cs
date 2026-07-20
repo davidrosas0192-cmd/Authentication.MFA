@@ -6,23 +6,23 @@ namespace Authentication.Fido2.Services.Interfaces;
 
 public interface IMfaService
 {
-    Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken);
-    Task<List<string>> GetAvailableSetupMethodsAsync(long userId, CancellationToken cancellationToken);
+    Task<List<string>> GetAllowedMethodsAsync(Guid userId, CancellationToken cancellationToken);
+    Task<List<string>> GetAvailableSetupMethodsAsync(Guid userId, CancellationToken cancellationToken);
     Task<(Guid SessionId, string ContinuationToken)> StartLoginEnrollmentSessionAsync(
-        long userId,
+        Guid userId,
         string tokenJti,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
     );
     Task<Result<StartMfaManagementSessionResponse>> StartManagementSessionAsync(
-        long userId,
+        Guid userId,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
     );
     Task<Result<StartMfaChallengeResponse>> StartManagementChallengeAsync(
-        long userId,
+        Guid userId,
         Guid managementSessionId,
         string continuationToken,
         string method,
@@ -31,7 +31,7 @@ public interface IMfaService
         CancellationToken cancellationToken
     );
     Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string method,
         string? ipAddress,
@@ -39,44 +39,44 @@ public interface IMfaService
         CancellationToken cancellationToken
     );
     Task<Result<VerifyMfaManagementChallengeResponse>> VerifyManagementChallengeAsync(
-        long userId,
+        Guid userId,
         Guid managementSessionId,
         string continuationToken,
         string code,
         CancellationToken cancellationToken
     );
     Task<Result<CompleteMfaManagementSessionResponse>> CompleteManagementSessionAsync(
-        long userId,
+        Guid userId,
         Guid managementSessionId,
         string continuationToken,
         CancellationToken cancellationToken
     );
     Task<Result<CancelMfaManagementSessionResponse>> CancelManagementSessionAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         CancellationToken cancellationToken
     );
     Task<Result<LoginResponse>> VerifyChallengeAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string continuationToken,
         string code,
         CancellationToken cancellationToken
     );
     Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentAsync(
-        long userId,
+        Guid userId,
         StartMfaEnrollmentRequest request,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
     );
     Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentAsync(
-        long userId,
+        Guid userId,
         VerifyMfaEnrollmentRequest request,
         CancellationToken cancellationToken
     );
     Task<Result<StartLoginEnrollmentResponse>> StartLoginEnrollmentAsync(
-        long userId,
+        Guid userId,
         Guid enrollmentSessionId,
         StartLoginEnrollmentRequest request,
         string? ipAddress,
@@ -84,13 +84,13 @@ public interface IMfaService
         CancellationToken cancellationToken
     );
     Task<Result<VerifyLoginEnrollmentResponse>> VerifyLoginEnrollmentAsync(
-        long userId,
+        Guid userId,
         Guid enrollmentSessionId,
         VerifyLoginEnrollmentRequest request,
         CancellationToken cancellationToken
     );
     Task<Result<LoginResponse>> CompleteLoginEnrollmentSessionAsync(
-        long userId,
+        Guid userId,
         Guid enrollmentSessionId,
         string continuationToken,
         string? ipAddress,
@@ -98,12 +98,12 @@ public interface IMfaService
         CancellationToken cancellationToken
     );
     Task<Result<RemoveMfaMethodResponse>> RemoveMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CancellationToken cancellationToken
     );
     Task<Result<StartMfaReconfigureResponse>> StartReconfigureMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         StartMfaReconfigureRequest request,
         string? ipAddress,
@@ -111,13 +111,13 @@ public interface IMfaService
         CancellationToken cancellationToken
     );
     Task<Result<CompleteMfaReconfigureResponse>> CompleteReconfigureMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CompleteMfaReconfigureRequest request,
         CancellationToken cancellationToken
     );
     Task<Guid> CreateSelectionChallengeAsync(
-        long userId,
+        Guid userId,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken

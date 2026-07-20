@@ -4,7 +4,7 @@ public class SessionItem
 {
     public Guid Id { get; set; }
     public string Type { get; set; } = default!; // "access" or "refresh"
-    public long UserId { get; set; }
+    public Guid UserId { get; set; }
     public DateTime IssuedAtUtc { get; set; }
     public DateTime ExpiresAtUtc { get; set; }
     public bool IsRevoked { get; set; }

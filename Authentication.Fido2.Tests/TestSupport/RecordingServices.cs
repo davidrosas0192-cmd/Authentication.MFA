@@ -38,7 +38,7 @@ internal sealed class RecordingAuditService : IAuditService
     public int SecurityEventCallCount { get; private set; }
 
     public Task TrackAuthenticationEventAsync(
-        long? userId,
+        Guid? userId,
         string? usernameOrEmail,
         string stage,
         string method,
@@ -56,7 +56,7 @@ internal sealed class RecordingAuditService : IAuditService
         string eventType,
         string severity,
         bool isSuccess,
-        long? userId,
+        Guid? userId,
         string? usernameOrEmail,
         string? failureReason,
         object? details,
@@ -77,9 +77,9 @@ internal sealed class RecordingAuthService : IAuthService
     public LoginRequest? LastLoginRequest { get; private set; }
     public string? LastLoginIpAddress { get; private set; }
     public string? LastLoginUserAgent { get; private set; }
-    public long LastLogoutUserId { get; private set; }
+    public Guid LastLogoutUserId { get; private set; }
     public string? LastLogoutJti { get; private set; }
-    public long LastCancelUserId { get; private set; }
+    public Guid LastCancelUserId { get; private set; }
     public string? LastCancelJti { get; private set; }
 
     public Func<Result<LoginResponse>>? LoginResultFactory { get; set; }
@@ -100,7 +100,7 @@ internal sealed class RecordingAuthService : IAuthService
         return Task.FromResult(LoginResultFactory?.Invoke() ?? throw new InvalidOperationException("Login result not configured."));
     }
 
-    public Task<Result> LogoutAsync(long userId, string tokenJti, CancellationToken cancellationToken)
+    public Task<Result> LogoutAsync(Guid userId, string tokenJti, CancellationToken cancellationToken)
     {
         LogoutCallCount++;
         LastLogoutUserId = userId;
@@ -108,7 +108,7 @@ internal sealed class RecordingAuthService : IAuthService
         return Task.FromResult(LogoutResultFactory?.Invoke() ?? throw new InvalidOperationException("Logout result not configured."));
     }
 
-    public Task<Result> CancelAuthenticationAsync(long userId, string tokenJti, CancellationToken cancellationToken)
+    public Task<Result> CancelAuthenticationAsync(Guid userId, string tokenJti, CancellationToken cancellationToken)
     {
         CancelAuthenticationCallCount++;
         LastCancelUserId = userId;
@@ -137,7 +137,7 @@ internal sealed class RecordingMfaService : IMfaService
     public int CompleteReconfigureMethodCallCount { get; private set; }
     public int CreateSelectionChallengeCallCount { get; private set; }
 
-    public long LastUserId { get; private set; }
+    public Guid LastUserId { get; private set; }
     public Guid LastMfaTransactionId { get; private set; }
     public string? LastMethod { get; private set; }
     public string? LastCode { get; private set; }
@@ -168,14 +168,14 @@ internal sealed class RecordingMfaService : IMfaService
     public Guid SelectionChallengeToReturn { get; set; }
     public (Guid SessionId, string ContinuationToken) LoginEnrollmentSessionToReturn { get; set; }
 
-    public Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken)
+    public Task<List<string>> GetAllowedMethodsAsync(Guid userId, CancellationToken cancellationToken)
     {
         GetAllowedMethodsCallCount++;
         LastUserId = userId;
         return Task.FromResult(AllowedMethodsToReturn);
     }
 
-    public Task<List<string>> GetAvailableSetupMethodsAsync(long userId, CancellationToken cancellationToken)
+    public Task<List<string>> GetAvailableSetupMethodsAsync(Guid userId, CancellationToken cancellationToken)
     {
         GetAvailableSetupMethodsCallCount++;
         LastUserId = userId;
@@ -183,7 +183,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<(Guid SessionId, string ContinuationToken)> StartLoginEnrollmentSessionAsync(
-        long userId,
+        Guid userId,
         string tokenJti,
         string? ipAddress,
         string? userAgent,
@@ -195,7 +195,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<StartMfaManagementSessionResponse>> StartManagementSessionAsync(
-        long userId,
+        Guid userId,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
@@ -207,7 +207,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string method,
         string? ipAddress,
@@ -223,7 +223,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<StartMfaChallengeResponse>> StartManagementChallengeAsync(
-        long userId,
+        Guid userId,
         Guid managementSessionId,
         string continuationToken,
         string method,
@@ -240,7 +240,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<LoginResponse>> VerifyChallengeAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string continuationToken,
         string code,
@@ -255,7 +255,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<VerifyMfaManagementChallengeResponse>> VerifyManagementChallengeAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string continuationToken,
         string code,
@@ -270,7 +270,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<CompleteMfaManagementSessionResponse>> CompleteManagementSessionAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string continuationToken,
         CancellationToken cancellationToken
@@ -283,7 +283,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<CancelMfaManagementSessionResponse>> CancelManagementSessionAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         CancellationToken cancellationToken
     )
@@ -295,7 +295,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentAsync(
-        long userId,
+        Guid userId,
         StartMfaEnrollmentRequest request,
         string? ipAddress,
         string? userAgent,
@@ -309,7 +309,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentAsync(
-        long userId,
+        Guid userId,
         VerifyMfaEnrollmentRequest request,
         CancellationToken cancellationToken
     )
@@ -321,7 +321,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<StartLoginEnrollmentResponse>> StartLoginEnrollmentAsync(
-        long userId,
+        Guid userId,
         Guid enrollmentSessionId,
         StartLoginEnrollmentRequest request,
         string? ipAddress,
@@ -337,7 +337,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<VerifyLoginEnrollmentResponse>> VerifyLoginEnrollmentAsync(
-        long userId,
+        Guid userId,
         Guid enrollmentSessionId,
         VerifyLoginEnrollmentRequest request,
         CancellationToken cancellationToken
@@ -351,7 +351,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<LoginResponse>> CompleteLoginEnrollmentSessionAsync(
-        long userId,
+        Guid userId,
         Guid enrollmentSessionId,
         string continuationToken,
         string? ipAddress,
@@ -366,7 +366,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<RemoveMfaMethodResponse>> RemoveMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CancellationToken cancellationToken
     )
@@ -378,7 +378,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<StartMfaReconfigureResponse>> StartReconfigureMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         StartMfaReconfigureRequest request,
         string? ipAddress,
@@ -394,7 +394,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Result<CompleteMfaReconfigureResponse>> CompleteReconfigureMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CompleteMfaReconfigureRequest request,
         CancellationToken cancellationToken
@@ -408,7 +408,7 @@ internal sealed class RecordingMfaService : IMfaService
     }
 
     public Task<Guid> CreateSelectionChallengeAsync(
-        long userId,
+        Guid userId,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
@@ -427,7 +427,7 @@ internal sealed class RecordingFido2MfaService : IFido2MfaService
     public int CreateLoginOptionsCallCount { get; private set; }
     public int CompleteLoginCallCount { get; private set; }
 
-    public long LastUserId { get; private set; }
+    public Guid LastUserId { get; private set; }
     public Guid LastMfaTransactionId { get; private set; }
     public string? LastIpAddress { get; private set; }
     public string? LastUserAgent { get; private set; }
@@ -440,7 +440,7 @@ internal sealed class RecordingFido2MfaService : IFido2MfaService
     public Result<LoginResponse> CompleteLoginResultToReturn { get; set; } = Result<LoginResponse>.Failure("Not configured");
 
     public Task<Result<Fido2OptionsResponse>> CreateEnrollmentOptionsAsync(
-        long userId,
+        Guid userId,
         string ipAddress,
         string userAgent,
         CancellationToken cancellationToken
@@ -453,7 +453,7 @@ internal sealed class RecordingFido2MfaService : IFido2MfaService
         return Task.FromResult(CreateEnrollmentOptionsResultToReturn);
     }
 
-    public Task<Result<CompleteFido2EnrollmentResponse>> CompleteEnrollmentAsync(CompleteFido2EnrollmentRequest request, long userId, CancellationToken cancellationToken)
+    public Task<Result<CompleteFido2EnrollmentResponse>> CompleteEnrollmentAsync(CompleteFido2EnrollmentRequest request, Guid userId, CancellationToken cancellationToken)
     {
         CompleteEnrollmentCallCount++;
         LastCompleteEnrollmentRequest = request;
@@ -462,7 +462,7 @@ internal sealed class RecordingFido2MfaService : IFido2MfaService
     }
 
     public Task<Result<Fido2OptionsResponse>> CreateLoginOptionsAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string ipAddress,
         string userAgent,
@@ -479,7 +479,7 @@ internal sealed class RecordingFido2MfaService : IFido2MfaService
 
     public Task<Result<LoginResponse>> CompleteLoginAsync(
         CompleteFido2LoginRequest request,
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         CancellationToken cancellationToken
     )
@@ -529,7 +529,7 @@ internal sealed class RecordingMfaTempTokenSessionRepository : IMfaTempTokenSess
         return Task.CompletedTask;
     }
 
-    public Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken)
+    public Task RevokeAllActiveByUserAsync(Guid userId, string reason, CancellationToken cancellationToken)
     {
         RevokeAllActiveByUserCallCount++;
         return Task.CompletedTask;
@@ -569,7 +569,7 @@ internal sealed class RecordingMfaLoginEnrollmentSessionRepository : IMfaLoginEn
         return Task.CompletedTask;
     }
 
-    public Task RevokeAllActiveByUserAsync(long userId, CancellationToken cancellationToken)
+    public Task RevokeAllActiveByUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         RevokeAllActiveByUserCallCount++;
         return Task.CompletedTask;

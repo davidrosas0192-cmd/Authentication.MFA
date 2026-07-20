@@ -8,5 +8,5 @@ public interface IMfaLoginEnrollmentSessionRepository
     Task<MfaLoginEnrollmentSession?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken);
     Task<MfaLoginEnrollmentSession?> GetActiveByJtiAsync(string tokenJti, CancellationToken cancellationToken);
     Task UpdateAsync(MfaLoginEnrollmentSession session, CancellationToken cancellationToken);
-    Task RevokeAllActiveByUserAsync(long userId, CancellationToken cancellationToken);
+    Task RevokeAllActiveByUserAsync(Guid userId, CancellationToken cancellationToken);
 }

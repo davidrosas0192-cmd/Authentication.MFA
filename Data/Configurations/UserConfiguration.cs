@@ -20,7 +20,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasData(
             new User
             {
-                Id = 1,
+                Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
                 Username = "cruzrx2",
                 Email = "davidrosas0192@gmail.com",
                 PasswordHash = "Rdavid58@",

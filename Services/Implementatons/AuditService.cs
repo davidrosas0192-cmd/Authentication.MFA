@@ -24,7 +24,7 @@ public class AuditService : IAuditService
     }
 
     public async Task TrackAuthenticationEventAsync(
-        long? userId,
+        Guid? userId,
         string? usernameOrEmail,
         string stage,
         string method,
@@ -66,7 +66,7 @@ public class AuditService : IAuditService
         string eventType,
         string severity,
         bool isSuccess,
-        long? userId,
+        Guid? userId,
         string? usernameOrEmail,
         string? failureReason,
         object? details,

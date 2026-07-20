@@ -26,7 +26,7 @@ public class MonitorController : ApiControllerBase
     /// <summary>Paginated login history.</summary>
     [HttpGet("/api/monitor/logins")]
     public async Task<IActionResult> GetLogins(
-        [FromQuery] long? userId,
+        [FromQuery] Guid? userId,
         [FromQuery] string? outcome,
         [FromQuery] string? method,
         [FromQuery] DateTime? dateFrom,
@@ -46,7 +46,7 @@ public class MonitorController : ApiControllerBase
     [HttpGet("/api/monitor/enrollments")]
     public async Task<IActionResult> GetEnrollments(
         [FromQuery] string? status,
-        [FromQuery] long? userId,
+        [FromQuery] Guid? userId,
         [FromQuery] DateTime? dateFrom,
         [FromQuery] DateTime? dateTo,
         [FromQuery] int page = 1,
@@ -66,7 +66,7 @@ public class MonitorController : ApiControllerBase
         [FromQuery] string? status,
         [FromQuery] string? purpose,
         [FromQuery] string? method,
-        [FromQuery] long? userId,
+        [FromQuery] Guid? userId,
         [FromQuery] DateTime? dateFrom,
         [FromQuery] DateTime? dateTo,
         [FromQuery] int page = 1,
@@ -83,7 +83,7 @@ public class MonitorController : ApiControllerBase
     /// <summary>Paginated access and refresh token sessions.</summary>
     [HttpGet("/api/monitor/sessions")]
     public async Task<IActionResult> GetSessions(
-        [FromQuery] long? userId,
+        [FromQuery] Guid? userId,
         [FromQuery] string? type,
         [FromQuery] bool onlyActive = false,
         [FromQuery] int page = 1,
@@ -104,7 +104,7 @@ public class MonitorController : ApiControllerBase
         [FromQuery] string? category,
         [FromQuery] string? eventType,
         [FromQuery] string? outcome,
-        [FromQuery] long? userId,
+        [FromQuery] Guid? userId,
         [FromQuery] DateTime? dateFrom,
         [FromQuery] DateTime? dateTo,
         [FromQuery] int page = 1,

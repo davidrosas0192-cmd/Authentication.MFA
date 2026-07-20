@@ -3,7 +3,7 @@ namespace Authentication.Fido2.DTOs.Monitor;
 public class EnrollmentItem
 {
     public Guid Id { get; set; }
-    public long UserId { get; set; }
+    public Guid UserId { get; set; }
     public string Status { get; set; } = default!;
     public int StepVersion { get; set; }
     public DateTime CreatedAtUtc { get; set; }

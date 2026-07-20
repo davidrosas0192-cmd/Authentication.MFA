@@ -15,9 +15,10 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginAsync_ReturnsRequiresEnrollment_WhenNoMethodsAreEnabled_AndSetupOptionsExist()
     {
+        var userId = Guid.Parse("44444444-4444-4444-4444-444444444444");
         var user = new User
         {
-            Id = 42,
+            Id = userId,
             Username = "demo",
             Email = "demo@example.com",
             PasswordHash = PasswordHasher.Hash("StrongPass123!"),
@@ -41,8 +42,8 @@ public class AuthServiceTests
             accessRepo,
             mfaTempRepo,
             enrollmentRepo,
-            new FakeAuditService(),
             mfaService,
+            new FakeAuditService(),
             Microsoft.Extensions.Options.Options.Create(new JwtOptions
             {
                 Issuer = "issuer",
@@ -91,7 +92,7 @@ public class AuthServiceTests
             _user = user;
         }
 
-        public Task<User?> GetByIdAsync(long userId, CancellationToken cancellationToken) =>
+        public Task<User?> GetByIdAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult<User?>(_user.Id == userId ? _user : null);
 
         public Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken) =>
@@ -110,9 +111,9 @@ public class AuthServiceTests
                     : null
             );
 
-        public Task EnableFido2MfaAsync(long userId, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task EnableFido2MfaAsync(Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task DisableFido2MfaAsync(long userId, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task DisableFido2MfaAsync(Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task UpdateAsync(User user, CancellationToken cancellationToken) => Task.CompletedTask;
     }
@@ -126,6 +127,8 @@ public class AuthServiceTests
         public string CreateLoginEnrollmentToken(User user, Guid enrollmentSessionId, string tokenJti) => "login-enrollment-token";
 
         public string CreateRefreshToken() => "refresh-token";
+
+        public string HashRefreshToken(string token) => token;
     }
 
     private sealed class FakeAccessTokenSessionRepository : IAccessTokenSessionRepository
@@ -139,7 +142,9 @@ public class AuthServiceTests
 
         public Task RevokeByJtiAsync(string tokenJti, string reason, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken)
+        public Task DeleteRevokedSessionsAsync(DateTime beforeUtc, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task RevokeAllActiveByUserAsync(Guid userId, string reason, CancellationToken cancellationToken)
         {
             RevokeAllActiveByUserCallCount++;
             return Task.CompletedTask;
@@ -159,7 +164,7 @@ public class AuthServiceTests
 
         public Task RevokeByJtiAsync(string tokenJti, string reason, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken)
+        public Task RevokeAllActiveByUserAsync(Guid userId, string reason, CancellationToken cancellationToken)
         {
             RevokeAllActiveByUserCallCount++;
             return Task.CompletedTask;
@@ -180,7 +185,7 @@ public class AuthServiceTests
 
         public Task UpdateAsync(MfaLoginEnrollmentSession session, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task RevokeAllActiveByUserAsync(long userId, CancellationToken cancellationToken)
+        public Task RevokeAllActiveByUserAsync(Guid userId, CancellationToken cancellationToken)
         {
             RevokeAllActiveByUserCallCount++;
             return Task.CompletedTask;
@@ -189,10 +194,10 @@ public class AuthServiceTests
 
     private sealed class FakeAuditService : IAuditService
     {
-        public Task TrackAuthenticationEventAsync(long? userId, string? usernameOrEmail, string stage, string method, bool isSuccess, string? failureReason, CancellationToken cancellationToken) =>
+        public Task TrackAuthenticationEventAsync(Guid? userId, string? usernameOrEmail, string stage, string method, bool isSuccess, string? failureReason, CancellationToken cancellationToken) =>
             Task.CompletedTask;
 
-        public Task TrackSecurityEventAsync(string category, string eventType, string severity, bool isSuccess, long? userId, string? usernameOrEmail, string? failureReason, object? details, CancellationToken cancellationToken) =>
+        public Task TrackSecurityEventAsync(string category, string eventType, string severity, bool isSuccess, Guid? userId, string? usernameOrEmail, string? failureReason, object? details, CancellationToken cancellationToken) =>
             Task.CompletedTask;
     }
 
@@ -202,24 +207,24 @@ public class AuthServiceTests
         public List<string> AvailableSetupMethodsToReturn { get; set; } = [];
         public (Guid SessionId, string ContinuationToken) LoginEnrollmentSessionToReturn { get; set; }
 
-        public Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken) => Task.FromResult(AllowedMethodsToReturn);
-        public Task<List<string>> GetAvailableSetupMethodsAsync(long userId, CancellationToken cancellationToken) => Task.FromResult(AvailableSetupMethodsToReturn);
-        public Task<(Guid SessionId, string ContinuationToken)> StartLoginEnrollmentSessionAsync(long userId, string tokenJti, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => Task.FromResult(LoginEnrollmentSessionToReturn);
-        public Task<Result<StartMfaManagementSessionResponse>> StartManagementSessionAsync(long userId, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<StartMfaChallengeResponse>> StartManagementChallengeAsync(long userId, Guid managementSessionId, string continuationToken, string method, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(long userId, Guid mfaTransactionId, string method, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<VerifyMfaManagementChallengeResponse>> VerifyManagementChallengeAsync(long userId, Guid managementSessionId, string continuationToken, string code, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<CompleteMfaManagementSessionResponse>> CompleteManagementSessionAsync(long userId, Guid managementSessionId, string continuationToken, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<CancelMfaManagementSessionResponse>> CancelManagementSessionAsync(long userId, Guid mfaTransactionId, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<LoginResponse>> VerifyChallengeAsync(long userId, Guid mfaTransactionId, string continuationToken, string code, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentAsync(long userId, StartMfaEnrollmentRequest request, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentAsync(long userId, VerifyMfaEnrollmentRequest request, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<StartLoginEnrollmentResponse>> StartLoginEnrollmentAsync(long userId, Guid enrollmentSessionId, StartLoginEnrollmentRequest request, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<VerifyLoginEnrollmentResponse>> VerifyLoginEnrollmentAsync(long userId, Guid enrollmentSessionId, VerifyLoginEnrollmentRequest request, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<LoginResponse>> CompleteLoginEnrollmentSessionAsync(long userId, Guid enrollmentSessionId, string continuationToken, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<RemoveMfaMethodResponse>> RemoveMethodAsync(long userId, string method, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<StartMfaReconfigureResponse>> StartReconfigureMethodAsync(long userId, string method, StartMfaReconfigureRequest request, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Result<CompleteMfaReconfigureResponse>> CompleteReconfigureMethodAsync(long userId, string method, CompleteMfaReconfigureRequest request, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Guid> CreateSelectionChallengeAsync(long userId, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<List<string>> GetAllowedMethodsAsync(Guid userId, CancellationToken cancellationToken) => Task.FromResult(AllowedMethodsToReturn);
+        public Task<List<string>> GetAvailableSetupMethodsAsync(Guid userId, CancellationToken cancellationToken) => Task.FromResult(AvailableSetupMethodsToReturn);
+        public Task<(Guid SessionId, string ContinuationToken)> StartLoginEnrollmentSessionAsync(Guid userId, string tokenJti, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => Task.FromResult(LoginEnrollmentSessionToReturn);
+        public Task<Result<StartMfaManagementSessionResponse>> StartManagementSessionAsync(Guid userId, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<StartMfaChallengeResponse>> StartManagementChallengeAsync(Guid userId, Guid managementSessionId, string continuationToken, string method, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(Guid userId, Guid mfaTransactionId, string method, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<VerifyMfaManagementChallengeResponse>> VerifyManagementChallengeAsync(Guid userId, Guid managementSessionId, string continuationToken, string code, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<CompleteMfaManagementSessionResponse>> CompleteManagementSessionAsync(Guid userId, Guid managementSessionId, string continuationToken, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<CancelMfaManagementSessionResponse>> CancelManagementSessionAsync(Guid userId, Guid mfaTransactionId, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<LoginResponse>> VerifyChallengeAsync(Guid userId, Guid mfaTransactionId, string continuationToken, string code, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentAsync(Guid userId, StartMfaEnrollmentRequest request, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentAsync(Guid userId, VerifyMfaEnrollmentRequest request, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<StartLoginEnrollmentResponse>> StartLoginEnrollmentAsync(Guid userId, Guid enrollmentSessionId, StartLoginEnrollmentRequest request, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<VerifyLoginEnrollmentResponse>> VerifyLoginEnrollmentAsync(Guid userId, Guid enrollmentSessionId, VerifyLoginEnrollmentRequest request, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<LoginResponse>> CompleteLoginEnrollmentSessionAsync(Guid userId, Guid enrollmentSessionId, string continuationToken, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<RemoveMfaMethodResponse>> RemoveMethodAsync(Guid userId, string method, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<StartMfaReconfigureResponse>> StartReconfigureMethodAsync(Guid userId, string method, StartMfaReconfigureRequest request, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Result<CompleteMfaReconfigureResponse>> CompleteReconfigureMethodAsync(Guid userId, string method, CompleteMfaReconfigureRequest request, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Guid> CreateSelectionChallengeAsync(Guid userId, string? ipAddress, string? userAgent, CancellationToken cancellationToken) => throw new NotImplementedException();
     }
 }

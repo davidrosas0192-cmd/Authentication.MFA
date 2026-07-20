@@ -31,7 +31,7 @@ public class MfaManagementSessionRepository : IMfaManagementSessionRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public Task<bool> HasActiveStepUpSessionAsync(long userId, DateTime sinceUtc, CancellationToken cancellationToken)
+    public Task<bool> HasActiveStepUpSessionAsync(Guid userId, DateTime sinceUtc, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
 

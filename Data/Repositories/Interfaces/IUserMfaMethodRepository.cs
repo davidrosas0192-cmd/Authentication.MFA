@@ -4,22 +4,22 @@ namespace Authentication.Fido2.Data.Repositories.Interfaces;
 
 public interface IUserMfaMethodRepository
 {
-    Task<List<UserMfaMethod>> GetEnabledByUserIdAsync(long userId, CancellationToken cancellationToken);
-    Task<List<UserMfaMethod>> GetByUserIdAsync(long userId, CancellationToken cancellationToken);
+    Task<List<UserMfaMethod>> GetEnabledByUserIdAsync(Guid userId, CancellationToken cancellationToken);
+    Task<List<UserMfaMethod>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken);
     Task<UserMfaMethod?> GetEnabledByUserIdAndMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CancellationToken cancellationToken
     );
     Task<UserMfaMethod?> GetByUserIdAndMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CancellationToken cancellationToken
     );
     Task<bool> IsContactValueInUseAsync(
         string contactValue,
         string method,
-        long excludeUserId,
+        Guid excludeUserId,
         CancellationToken cancellationToken
     );
     Task AddAsync(UserMfaMethod method, CancellationToken cancellationToken);

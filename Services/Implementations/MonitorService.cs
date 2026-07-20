@@ -81,7 +81,7 @@ public class MonitorService : IMonitorService
     }
 
     public async Task<PagedResponse<LoginHistoryItem>> GetLoginsAsync(
-        long? userId,
+        Guid? userId,
         string? outcome,
         string? method,
         DateTime? dateFrom,
@@ -144,7 +144,7 @@ public class MonitorService : IMonitorService
 
     public async Task<PagedResponse<EnrollmentItem>> GetEnrollmentsAsync(
         string? status,
-        long? userId,
+        Guid? userId,
         DateTime? dateFrom,
         DateTime? dateTo,
         int page,
@@ -202,7 +202,7 @@ public class MonitorService : IMonitorService
         string? status,
         string? purpose,
         string? method,
-        long? userId,
+        Guid? userId,
         DateTime? dateFrom,
         DateTime? dateTo,
         int page,
@@ -267,7 +267,7 @@ public class MonitorService : IMonitorService
     }
 
     public async Task<PagedResponse<SessionItem>> GetSessionsAsync(
-        long? userId,
+        Guid? userId,
         string? type,
         bool onlyActive,
         int page,
@@ -303,7 +303,7 @@ public class MonitorService : IMonitorService
     }
 
     private async Task<PagedResponse<SessionItem>> GetAccessSessionsPagedAsync(
-        long? userId, bool onlyActive, DateTime now, int page, int pageSize, CancellationToken ct)
+        Guid? userId, bool onlyActive, DateTime now, int page, int pageSize, CancellationToken ct)
     {
         var q = _context.AccessTokenSessions.AsNoTracking();
         if (userId.HasValue) q = q.Where(x => x.UserId == userId.Value);
@@ -327,7 +327,7 @@ public class MonitorService : IMonitorService
     }
 
     private async Task<PagedResponse<SessionItem>> GetRefreshSessionsPagedAsync(
-        long? userId, bool onlyActive, DateTime now, int page, int pageSize, CancellationToken ct)
+        Guid? userId, bool onlyActive, DateTime now, int page, int pageSize, CancellationToken ct)
     {
         var q = _context.RefreshTokenSessions.AsNoTracking();
         if (userId.HasValue) q = q.Where(x => x.UserId == userId.Value);
@@ -356,7 +356,7 @@ public class MonitorService : IMonitorService
         string? category,
         string? eventType,
         string? outcome,
-        long? userId,
+        Guid? userId,
         DateTime? dateFrom,
         DateTime? dateTo,
         int page,

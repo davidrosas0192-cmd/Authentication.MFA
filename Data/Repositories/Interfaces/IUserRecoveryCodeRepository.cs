@@ -5,17 +5,17 @@ namespace Authentication.Fido2.Data.Repositories.Interfaces;
 public interface IUserRecoveryCodeRepository
 {
     Task<(UserRecoveryCodeBatch? Batch, int RemainingCount)> GetStatusAsync(
-        long userId,
+        Guid userId,
         CancellationToken cancellationToken
     );
 
-    Task<bool> HasUnusedCodesAsync(long userId, CancellationToken cancellationToken);
+    Task<bool> HasUnusedCodesAsync(Guid userId, CancellationToken cancellationToken);
 
     Task<UserRecoveryCodeBatch> ReplaceBatchAsync(
-        long userId,
+        Guid userId,
         IReadOnlyCollection<string> codeHashes,
         CancellationToken cancellationToken
     );
 
-    Task<bool> TryConsumeCodeAsync(long userId, string code, CancellationToken cancellationToken);
+    Task<bool> TryConsumeCodeAsync(Guid userId, string code, CancellationToken cancellationToken);
 }

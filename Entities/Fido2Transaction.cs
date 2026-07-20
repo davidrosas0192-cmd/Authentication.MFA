@@ -4,7 +4,7 @@ public class Fido2Transaction
 {
     public Guid Id { get; set; }
 
-    public long UserId { get; set; }
+    public Guid UserId { get; set; }
 
     public string Type { get; set; } = default!; 
 

@@ -7,5 +7,5 @@ public interface IMfaManagementSessionRepository
     Task AddAsync(MfaManagementSession session, CancellationToken cancellationToken);
     Task<MfaManagementSession?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task UpdateAsync(MfaManagementSession session, CancellationToken cancellationToken);
-    Task<bool> HasActiveStepUpSessionAsync(long userId, DateTime sinceUtc, CancellationToken cancellationToken);
+    Task<bool> HasActiveStepUpSessionAsync(Guid userId, DateTime sinceUtc, CancellationToken cancellationToken);
 }

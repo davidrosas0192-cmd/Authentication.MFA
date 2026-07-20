@@ -68,7 +68,7 @@ public class MfaService : IMfaService
         _jwtOptions = jwtOptions.Value;
     }
 
-    public async Task<List<string>> GetAllowedMethodsAsync(long userId, CancellationToken cancellationToken)
+    public async Task<List<string>> GetAllowedMethodsAsync(Guid userId, CancellationToken cancellationToken)
     {
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
         if (user is null)
@@ -94,7 +94,7 @@ public class MfaService : IMfaService
         return normalized;
     }
 
-    public async Task<List<string>> GetAvailableSetupMethodsAsync(long userId, CancellationToken cancellationToken)
+    public async Task<List<string>> GetAvailableSetupMethodsAsync(Guid userId, CancellationToken cancellationToken)
     {
         var enabled = await GetAllowedMethodsAsync(userId, cancellationToken);
         var allOptions = new List<string>
@@ -110,7 +110,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<(Guid SessionId, string ContinuationToken)> StartLoginEnrollmentSessionAsync(
-        long userId,
+        Guid userId,
         string tokenJti,
         string? ipAddress,
         string? userAgent,
@@ -148,7 +148,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<StartMfaManagementSessionResponse>> StartManagementSessionAsync(
-        long userId,
+        Guid userId,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
@@ -212,7 +212,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<StartMfaChallengeResponse>> StartManagementChallengeAsync(
-        long userId,
+        Guid userId,
         Guid managementSessionId,
         string continuationToken,
         string methodName,
@@ -351,7 +351,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Guid> CreateSelectionChallengeAsync(
-        long userId,
+        Guid userId,
         string? ipAddress,
         string? userAgent,
         CancellationToken cancellationToken
@@ -377,7 +377,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<StartMfaChallengeResponse>> StartChallengeAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string methodName,
         string? ipAddress,
@@ -594,7 +594,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<VerifyMfaManagementChallengeResponse>> VerifyManagementChallengeAsync(
-        long userId,
+        Guid userId,
         Guid managementSessionId,
         string continuationToken,
         string code,
@@ -792,7 +792,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<CompleteMfaManagementSessionResponse>> CompleteManagementSessionAsync(
-        long userId,
+        Guid userId,
         Guid managementSessionId,
         string continuationToken,
         CancellationToken cancellationToken
@@ -853,7 +853,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<CancelMfaManagementSessionResponse>> CancelManagementSessionAsync(
-        long userId,
+        Guid userId,
         Guid managementSessionId,
         CancellationToken cancellationToken
     )
@@ -917,7 +917,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<LoginResponse>> VerifyChallengeAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string continuationToken,
         string code,
@@ -955,7 +955,7 @@ public class MfaService : IMfaService
     }
 
     private async Task<Result<LoginResponse>> VerifyChallengeInternalAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string continuationToken,
         string code,
@@ -1277,7 +1277,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentAsync(
-        long userId,
+        Guid userId,
         StartMfaEnrollmentRequest request,
         string? ipAddress,
         string? userAgent,
@@ -1297,7 +1297,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<StartLoginEnrollmentResponse>> StartLoginEnrollmentAsync(
-        long userId,
+        Guid userId,
         Guid enrollmentSessionId,
         StartLoginEnrollmentRequest request,
         string? ipAddress,
@@ -1391,7 +1391,7 @@ public class MfaService : IMfaService
     }
 
     private async Task<Result<StartMfaEnrollmentResponse>> StartEnrollmentCoreAsync(
-        long userId,
+        Guid userId,
         StartMfaEnrollmentRequest request,
         string? ipAddress,
         string? userAgent,
@@ -1513,7 +1513,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentAsync(
-        long userId,
+        Guid userId,
         VerifyMfaEnrollmentRequest request,
         CancellationToken cancellationToken
     )
@@ -1531,7 +1531,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<VerifyLoginEnrollmentResponse>> VerifyLoginEnrollmentAsync(
-        long userId,
+        Guid userId,
         Guid enrollmentSessionId,
         VerifyLoginEnrollmentRequest request,
         CancellationToken cancellationToken
@@ -1603,7 +1603,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<LoginResponse>> CompleteLoginEnrollmentSessionAsync(
-        long userId,
+        Guid userId,
         Guid enrollmentSessionId,
         string continuationToken,
         string? ipAddress,
@@ -1709,7 +1709,7 @@ public class MfaService : IMfaService
     }
 
     private async Task<Result<VerifyMfaEnrollmentResponse>> VerifyEnrollmentCoreAsync(
-        long userId,
+        Guid userId,
         VerifyMfaEnrollmentRequest request,
         CancellationToken cancellationToken
     )
@@ -1883,7 +1883,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<RemoveMfaMethodResponse>> RemoveMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CancellationToken cancellationToken
     )
@@ -1978,7 +1978,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<StartMfaReconfigureResponse>> StartReconfigureMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         StartMfaReconfigureRequest request,
         string? ipAddress,
@@ -2120,7 +2120,7 @@ public class MfaService : IMfaService
     }
 
     public async Task<Result<CompleteMfaReconfigureResponse>> CompleteReconfigureMethodAsync(
-        long userId,
+        Guid userId,
         string method,
         CompleteMfaReconfigureRequest request,
         CancellationToken cancellationToken
@@ -2299,7 +2299,7 @@ public class MfaService : IMfaService
     }
 
     private async Task<List<string>> EnsureRecoveryCodesIssuedAsync(
-        long userId,
+        Guid userId,
         CancellationToken cancellationToken
     )
     {
@@ -2339,7 +2339,7 @@ public class MfaService : IMfaService
 
     private static string NormalizeRecoveryCode(string requestedCode) => RecoveryCodeHelper.Normalize(requestedCode);
 
-    private Task<bool> HasRecentManagementStepUpAsync(long userId, CancellationToken cancellationToken)
+    private Task<bool> HasRecentManagementStepUpAsync(Guid userId, CancellationToken cancellationToken)
     {
         return _mfaManagementSessionRepository.HasActiveStepUpSessionAsync(
             userId,

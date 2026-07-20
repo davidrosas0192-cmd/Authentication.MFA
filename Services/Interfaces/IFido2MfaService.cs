@@ -7,7 +7,7 @@ namespace Authentication.Fido2.Services.Interfaces;
 public interface IFido2MfaService
 {
     Task<Result<Fido2OptionsResponse>> CreateEnrollmentOptionsAsync(
-        long userId,
+        Guid userId,
         string ipAddress,
         string userAgent,
         CancellationToken cancellationToken
@@ -15,12 +15,12 @@ public interface IFido2MfaService
 
     Task<Result<CompleteFido2EnrollmentResponse>> CompleteEnrollmentAsync(
         CompleteFido2EnrollmentRequest request,
-        long userId,
+        Guid userId,
         CancellationToken cancellationToken
     );
 
     Task<Result<Fido2OptionsResponse>> CreateLoginOptionsAsync(
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         string ipAddress,
         string userAgent,
@@ -29,7 +29,7 @@ public interface IFido2MfaService
 
     Task<Result<LoginResponse>> CompleteLoginAsync(
         CompleteFido2LoginRequest request,
-        long userId,
+        Guid userId,
         Guid mfaTransactionId,
         CancellationToken cancellationToken
     );

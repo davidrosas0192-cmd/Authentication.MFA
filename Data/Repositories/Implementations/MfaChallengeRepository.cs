@@ -31,7 +31,7 @@ public class MfaChallengeRepository : IMfaChallengeRepository
     }
 
     public Task<bool> HasRecentVerifiedChallengeAsync(
-        long userId,
+        Guid userId,
         string purpose,
         DateTime sinceUtc,
         CancellationToken cancellationToken

@@ -15,7 +15,7 @@ public class UserRecoveryCodeRepository : IUserRecoveryCodeRepository
     }
 
     public async Task<(UserRecoveryCodeBatch? Batch, int RemainingCount)> GetStatusAsync(
-        long userId,
+        Guid userId,
         CancellationToken cancellationToken
     )
     {
@@ -36,7 +36,7 @@ public class UserRecoveryCodeRepository : IUserRecoveryCodeRepository
         return (batch, remaining);
     }
 
-    public Task<bool> HasUnusedCodesAsync(long userId, CancellationToken cancellationToken)
+    public Task<bool> HasUnusedCodesAsync(Guid userId, CancellationToken cancellationToken)
     {
         return _context.UserRecoveryCodes.AnyAsync(
             x => x.UserId == userId && x.UsedAtUtc == null && x.Batch.ReplacedAtUtc == null,
@@ -45,7 +45,7 @@ public class UserRecoveryCodeRepository : IUserRecoveryCodeRepository
     }
 
     public async Task<UserRecoveryCodeBatch> ReplaceBatchAsync(
-        long userId,
+        Guid userId,
         IReadOnlyCollection<string> codeHashes,
         CancellationToken cancellationToken
     )
@@ -97,7 +97,7 @@ public class UserRecoveryCodeRepository : IUserRecoveryCodeRepository
         return newBatch;
     }
 
-    public async Task<bool> TryConsumeCodeAsync(long userId, string code, CancellationToken cancellationToken)
+    public async Task<bool> TryConsumeCodeAsync(Guid userId, string code, CancellationToken cancellationToken)
     {
         var activeBatch = await _context
             .UserRecoveryCodeBatches.AsNoTracking()

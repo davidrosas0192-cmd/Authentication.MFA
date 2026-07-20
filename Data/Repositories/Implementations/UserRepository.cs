@@ -30,7 +30,7 @@ public class UserRepository : IUserRepository
         return response;
     }
 
-    public Task<User?> GetByIdAsync(long userId, CancellationToken cancellationToken)
+    public Task<User?> GetByIdAsync(Guid userId, CancellationToken cancellationToken)
     {
         return _context
             .Users.AsNoTracking()
@@ -66,7 +66,7 @@ public class UserRepository : IUserRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task EnableFido2MfaAsync(long userId, CancellationToken cancellationToken)
+    public async Task EnableFido2MfaAsync(Guid userId, CancellationToken cancellationToken)
     {
         var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
 
@@ -80,7 +80,7 @@ public class UserRepository : IUserRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task DisableFido2MfaAsync(long userId, CancellationToken cancellationToken)
+    public async Task DisableFido2MfaAsync(Guid userId, CancellationToken cancellationToken)
     {
         var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
 

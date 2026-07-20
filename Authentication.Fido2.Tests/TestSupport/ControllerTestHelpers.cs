@@ -19,7 +19,7 @@ internal static class ControllerTestHelpers
     }
 
     public static ClaimsPrincipal CreateUserPrincipal(
-        long userId,
+        Guid userId,
         Guid? mfaTransactionId = null,
         string? tokenType = null,
         string? tokenJti = null,

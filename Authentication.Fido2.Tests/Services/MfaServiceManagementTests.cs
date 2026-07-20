@@ -16,9 +16,10 @@ public class MfaServiceManagementTests
     [Fact]
     public async Task RemoveMethodAsync_ReturnsForbidden_WhenStepUpIsMissing()
     {
+        var userId = Guid.Parse("44444444-4444-4444-4444-444444444444");
         var service = BuildService(new FakeMfaChallengeRepository(), new FakeMfaManagementSessionRepository());
 
-        var result = await service.RemoveMethodAsync(42, MfaMethodTypes.Sms, CancellationToken.None);
+        var result = await service.RemoveMethodAsync(userId, MfaMethodTypes.Sms, CancellationToken.None);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(StatusCodes.Status403Forbidden, result.StatusCode);
@@ -27,10 +28,11 @@ public class MfaServiceManagementTests
     [Fact]
     public async Task StartReconfigureMethodAsync_ReturnsForbidden_WhenStepUpIsMissing()
     {
+        var userId = Guid.Parse("44444444-4444-4444-4444-444444444444");
         var service = BuildService(new FakeMfaChallengeRepository(), new FakeMfaManagementSessionRepository());
 
         var result = await service.StartReconfigureMethodAsync(
-            42,
+            userId,
             MfaMethodTypes.Email,
             new StartMfaReconfigureRequest { ContactValue = "user@example.com" },
             null,
@@ -45,10 +47,11 @@ public class MfaServiceManagementTests
     [Fact]
     public async Task CompleteManagementSessionAsync_MarksSessionConsumed_WhenSessionIsVerified()
     {
+        var userId = Guid.Parse("44444444-4444-4444-4444-444444444444");
         var session = new MfaManagementSession
         {
             Id = Guid.NewGuid(),
-            UserId = 42,
+            UserId = userId,
             Status = MfaManagementSessionStatuses.StepUpCompleted,
             ContinuationToken = "token-1",
             StepVersion = 2,
@@ -59,7 +62,7 @@ public class MfaServiceManagementTests
         var sessionRepository = new FakeMfaManagementSessionRepository(session);
         var service = BuildService(new FakeMfaChallengeRepository(), sessionRepository);
 
-        var result = await service.CompleteManagementSessionAsync(42, session.Id, "token-1", CancellationToken.None);
+        var result = await service.CompleteManagementSessionAsync(userId, session.Id, "token-1", CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(MfaManagementSessionStatuses.Completed, sessionRepository.StoredSession?.Status);
@@ -68,10 +71,11 @@ public class MfaServiceManagementTests
     [Fact]
     public async Task CancelManagementSessionAsync_MarksSessionRevoked_WhenSessionIsPending()
     {
+        var userId = Guid.Parse("44444444-4444-4444-4444-444444444444");
         var session = new MfaManagementSession
         {
             Id = Guid.NewGuid(),
-            UserId = 42,
+            UserId = userId,
             Status = MfaManagementSessionStatuses.StepUpRequired,
             ContinuationToken = "token-1",
             StepVersion = 1,
@@ -81,7 +85,7 @@ public class MfaServiceManagementTests
         var sessionRepository = new FakeMfaManagementSessionRepository(session);
         var service = BuildService(new FakeMfaChallengeRepository(), sessionRepository);
 
-        var result = await service.CancelManagementSessionAsync(42, session.Id, CancellationToken.None);
+        var result = await service.CancelManagementSessionAsync(userId, session.Id, CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(MfaManagementSessionStatuses.Cancelled, sessionRepository.StoredSession?.Status);
@@ -90,10 +94,11 @@ public class MfaServiceManagementTests
     [Fact]
     public async Task StartChallengeAsync_ReturnsGone_WhenLoginTransactionIsExpired()
     {
+        var userId = Guid.Parse("44444444-4444-4444-4444-444444444444");
         var challenge = new MfaChallenge
         {
             Id = Guid.NewGuid(),
-            UserId = 42,
+            UserId = userId,
             Purpose = MfaChallengePurposes.Login,
             Status = MfaChallengeStatuses.PendingSelection,
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1),
@@ -105,7 +110,7 @@ public class MfaServiceManagementTests
         );
 
         var result = await service.StartChallengeAsync(
-            42,
+            userId,
             challenge.Id,
             MfaMethodTypes.Sms,
             null,
@@ -120,10 +125,11 @@ public class MfaServiceManagementTests
     [Fact]
     public async Task VerifyChallengeAsync_ReturnsGone_WhenLoginChallengeIsExpired()
     {
+        var userId = Guid.Parse("44444444-4444-4444-4444-444444444444");
         var challenge = new MfaChallenge
         {
             Id = Guid.NewGuid(),
-            UserId = 42,
+            UserId = userId,
             Purpose = MfaChallengePurposes.Login,
             Method = MfaMethodTypes.Sms,
             ContinuationToken = "ct-1",
@@ -137,7 +143,7 @@ public class MfaServiceManagementTests
         );
 
         var result = await service.VerifyChallengeAsync(
-            42,
+            userId,
             challenge.Id,
             "ct-1",
             "123456",
@@ -151,10 +157,11 @@ public class MfaServiceManagementTests
     [Fact]
     public async Task VerifyEnrollmentAsync_ReturnsForbidden_WhenStepUpIsMissing_BeforeChallengeEvaluation()
     {
+        var userId = Guid.Parse("44444444-4444-4444-4444-444444444444");
         var challenge = new MfaChallenge
         {
             Id = Guid.NewGuid(),
-            UserId = 42,
+            UserId = userId,
             Purpose = MfaChallengePurposes.Enrollment,
             Method = MfaMethodTypes.Sms,
             ContactValue = "+1234567890",
@@ -169,7 +176,7 @@ public class MfaServiceManagementTests
         );
 
         var result = await service.VerifyEnrollmentAsync(
-            42,
+            userId,
             new VerifyMfaEnrollmentRequest
             {
                 EnrollmentTransactionId = challenge.Id,
@@ -199,6 +206,7 @@ public class MfaServiceManagementTests
             new FakeTokenService(),
             new FakeAccessTokenSessionRepository(),
             new FakeMfaTempTokenSessionRepository(),
+            new FakeSessionFactory(),
             new FakeAuditService(),
             Microsoft.Extensions.Options.Options.Create(new JwtOptions
             {
@@ -223,7 +231,7 @@ public class MfaServiceManagementTests
 
         public Task UpdateAsync(MfaLoginEnrollmentSession session, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task RevokeAllActiveByUserAsync(long userId, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task RevokeAllActiveByUserAsync(Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class FakeMfaChallengeRepository : IMfaChallengeRepository
@@ -253,7 +261,7 @@ public class MfaServiceManagementTests
         }
 
         public Task<bool> HasRecentVerifiedChallengeAsync(
-            long userId,
+            Guid userId,
             string purpose,
             DateTime sinceUtc,
             CancellationToken cancellationToken
@@ -269,6 +277,12 @@ public class MfaServiceManagementTests
 
             return Task.FromResult(hasRecent);
         }
+
+        public Task DeleteExpiredChallengesAsync(DateTime beforeUtc, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task DeleteLockedChallengesAsync(DateTime beforeUtc, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task DeleteCompletedChallengesAsync(DateTime beforeUtc, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class FakeMfaManagementSessionRepository : IMfaManagementSessionRepository
@@ -297,7 +311,7 @@ public class MfaServiceManagementTests
             return Task.CompletedTask;
         }
 
-        public Task<bool> HasActiveStepUpSessionAsync(long userId, DateTime sinceUtc, CancellationToken cancellationToken)
+        public Task<bool> HasActiveStepUpSessionAsync(Guid userId, DateTime sinceUtc, CancellationToken cancellationToken)
         {
             var hasActive = StoredSession is not null
                 && StoredSession.UserId == userId
@@ -312,17 +326,20 @@ public class MfaServiceManagementTests
 
     private sealed class FakeUserMfaMethodRepository : IUserMfaMethodRepository
     {
-        public Task<List<UserMfaMethod>> GetEnabledByUserIdAsync(long userId, CancellationToken cancellationToken) =>
+        public Task<List<UserMfaMethod>> GetEnabledByUserIdAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult(new List<UserMfaMethod>());
 
-        public Task<List<UserMfaMethod>> GetByUserIdAsync(long userId, CancellationToken cancellationToken) =>
+        public Task<List<UserMfaMethod>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult(new List<UserMfaMethod>());
 
-        public Task<UserMfaMethod?> GetEnabledByUserIdAndMethodAsync(long userId, string method, CancellationToken cancellationToken) =>
+        public Task<UserMfaMethod?> GetEnabledByUserIdAndMethodAsync(Guid userId, string method, CancellationToken cancellationToken) =>
             Task.FromResult<UserMfaMethod?>(null);
 
-        public Task<UserMfaMethod?> GetByUserIdAndMethodAsync(long userId, string method, CancellationToken cancellationToken) =>
+        public Task<UserMfaMethod?> GetByUserIdAndMethodAsync(Guid userId, string method, CancellationToken cancellationToken) =>
             Task.FromResult<UserMfaMethod?>(null);
+
+        public Task<bool> IsContactValueInUseAsync(string contactValue, string method, Guid excludeUserId, CancellationToken cancellationToken) =>
+            Task.FromResult(false);
 
         public Task AddAsync(UserMfaMethod method, CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -331,20 +348,20 @@ public class MfaServiceManagementTests
 
     private sealed class FakeUserRecoveryCodeRepository : IUserRecoveryCodeRepository
     {
-        public Task<(UserRecoveryCodeBatch? Batch, int RemainingCount)> GetStatusAsync(long userId, CancellationToken cancellationToken) =>
+        public Task<(UserRecoveryCodeBatch? Batch, int RemainingCount)> GetStatusAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult<(UserRecoveryCodeBatch?, int)>((null, 0));
 
-        public Task<bool> HasUnusedCodesAsync(long userId, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<bool> HasUnusedCodesAsync(Guid userId, CancellationToken cancellationToken) => Task.FromResult(false);
 
-        public Task<UserRecoveryCodeBatch> ReplaceBatchAsync(long userId, IReadOnlyCollection<string> codeHashes, CancellationToken cancellationToken) =>
+        public Task<UserRecoveryCodeBatch> ReplaceBatchAsync(Guid userId, IReadOnlyCollection<string> codeHashes, CancellationToken cancellationToken) =>
             Task.FromResult(new UserRecoveryCodeBatch());
 
-        public Task<bool> TryConsumeCodeAsync(long userId, string code, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<bool> TryConsumeCodeAsync(Guid userId, string code, CancellationToken cancellationToken) => Task.FromResult(false);
     }
 
     private sealed class FakeUserRepository : IUserRepository
     {
-        public Task<User?> GetByIdAsync(long userId, CancellationToken cancellationToken) =>
+        public Task<User?> GetByIdAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult<User?>(new User { Id = userId, Username = "user", Email = "user@example.com", PasswordHash = "hash", IsActive = true });
 
         public Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken) => Task.FromResult<User?>(null);
@@ -355,9 +372,9 @@ public class MfaServiceManagementTests
 
         public Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken cancellationToken) => Task.FromResult<User?>(null);
 
-        public Task EnableFido2MfaAsync(long userId, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task EnableFido2MfaAsync(Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task DisableFido2MfaAsync(long userId, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task DisableFido2MfaAsync(Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task UpdateAsync(User user, CancellationToken cancellationToken) => Task.CompletedTask;
     }
@@ -380,6 +397,8 @@ public class MfaServiceManagementTests
         public string CreateMfaToken(User user, Guid mfaTransactionId, string tokenJti) => "mfa";
 
         public string CreateRefreshToken() => "refresh";
+
+        public string HashRefreshToken(string token) => token;
     }
 
     private sealed class FakeAccessTokenSessionRepository : IAccessTokenSessionRepository
@@ -391,7 +410,15 @@ public class MfaServiceManagementTests
 
         public Task RevokeByJtiAsync(string tokenJti, string reason, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task DeleteRevokedSessionsAsync(DateTime beforeUtc, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task RevokeAllActiveByUserAsync(Guid userId, string reason, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class FakeSessionFactory : ISessionFactory
+    {
+        public Task<(string AccessToken, string RefreshToken)> CreateAuthenticatedSessionAsync(User user, string? ipAddress, string? userAgent, CancellationToken cancellationToken) =>
+            Task.FromResult(("access", "refresh"));
     }
 
     private sealed class FakeMfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
@@ -405,13 +432,13 @@ public class MfaServiceManagementTests
 
         public Task RevokeByJtiAsync(string tokenJti, string reason, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task RevokeAllActiveByUserAsync(long userId, string reason, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task RevokeAllActiveByUserAsync(Guid userId, string reason, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class FakeAuditService : IAuditService
     {
         public Task TrackAuthenticationEventAsync(
-            long? userId,
+            Guid? userId,
             string? usernameOrEmail,
             string stage,
             string method,
@@ -425,7 +452,7 @@ public class MfaServiceManagementTests
             string eventType,
             string severity,
             bool isSuccess,
-            long? userId,
+            Guid? userId,
             string? usernameOrEmail,
             string? failureReason,
             object? details,

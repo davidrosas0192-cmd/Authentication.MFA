@@ -183,7 +183,7 @@ public class MonitorService : IMonitorService
                 Status = x.Status,
                 StepVersion = x.StepVersion,
                 CreatedAtUtc = x.CreatedAtUtc,
-                UpdatedAtUtc = x.UpdatedAtUtc,
+                ModifiedAtUtc = x.ModifiedAtUtc,
                 ExpiresAtUtc = x.ExpiresAtUtc,
                 CompletedAtUtc = x.CompletedAtUtc,
             })

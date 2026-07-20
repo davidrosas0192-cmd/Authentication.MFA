@@ -19,6 +19,8 @@ public class Fido2Transaction
     public string UserAgent { get; set; } = default!;
 
     public DateTime CreatedAtUtc { get; set; }
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 
     public DateTime ExpiresAtUtc { get; set; }
 

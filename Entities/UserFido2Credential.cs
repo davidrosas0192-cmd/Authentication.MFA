@@ -19,6 +19,8 @@ public class UserFido2Credential
     public string? CredType { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 
     public DateTime? LastUsedAtUtc { get; set; }
 

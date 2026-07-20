@@ -8,7 +8,9 @@ public class MfaSession
     public string TokenJti { get; set; } = default!;
     public DateTime ExpiresAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ModifiedAtUtc { get; set; } = DateTime.UtcNow;
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 
     public string? Status { get; set; }
     public string? ContinuationToken { get; set; }

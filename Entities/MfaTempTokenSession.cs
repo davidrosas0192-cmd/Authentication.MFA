@@ -12,4 +12,6 @@ public class MfaTempTokenSession
     public DateTime? RevokedAtUtc { get; set; }
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 }

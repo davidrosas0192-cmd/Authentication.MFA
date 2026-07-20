@@ -20,4 +20,6 @@ public class MfaChallenge
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 }

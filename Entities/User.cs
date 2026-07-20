@@ -9,5 +9,7 @@ public class User
     public bool IsActive { get; set; } = true;
     public bool IsFido2MfaEnabled { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
 }

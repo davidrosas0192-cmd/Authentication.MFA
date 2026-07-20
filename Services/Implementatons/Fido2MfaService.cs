@@ -333,7 +333,7 @@ public class Fido2MfaService : IFido2MfaService
                     IsVerified = true,
                     ContactValue = null,
                     CreatedAtUtc = DateTime.UtcNow,
-                    UpdatedAtUtc = DateTime.UtcNow,
+                    ModifiedAtUtc = DateTime.UtcNow,
                 },
                 cancellationToken
             );
@@ -342,7 +342,7 @@ public class Fido2MfaService : IFido2MfaService
         {
             existingMethod.IsEnabled = true;
             existingMethod.IsVerified = true;
-            existingMethod.UpdatedAtUtc = DateTime.UtcNow;
+            existingMethod.ModifiedAtUtc = DateTime.UtcNow;
 
             await _userMfaMethodRepository.UpdateAsync(existingMethod, cancellationToken);
         }

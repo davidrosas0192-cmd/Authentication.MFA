@@ -18,6 +18,6 @@ public class UserRecoveryCodeBatchConfiguration : IEntityTypeConfiguration<UserR
         builder.HasMany(x => x.Codes)
             .WithOne(x => x.Batch)
             .HasForeignKey(x => x.BatchId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

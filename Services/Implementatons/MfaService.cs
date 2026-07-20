@@ -127,7 +127,7 @@ public class MfaService : IMfaService
             TokenJti = tokenJti,
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
             CreatedAtUtc = DateTime.UtcNow,
-            UpdatedAtUtc = DateTime.UtcNow,
+            ModifiedAtUtc = DateTime.UtcNow,
         };
 
         await _mfaLoginEnrollmentSessionRepository.AddAsync(session, cancellationToken);
@@ -181,7 +181,7 @@ public class MfaService : IMfaService
             StepVersion = 1,
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(MfaChallengeOptions.ChallengeExpirationMinutes),
             CreatedAtUtc = DateTime.UtcNow,
-            UpdatedAtUtc = DateTime.UtcNow,
+            ModifiedAtUtc = DateTime.UtcNow,
         };
 
         await _mfaManagementSessionRepository.AddAsync(session, cancellationToken);
@@ -324,7 +324,7 @@ public class MfaService : IMfaService
         session.ChallengeId = challenge.Id;
         session.ContinuationToken = rotatedContinuationToken;
         session.StepVersion += 1;
-        session.UpdatedAtUtc = DateTime.UtcNow;
+        session.ModifiedAtUtc = DateTime.UtcNow;
         await _mfaManagementSessionRepository.UpdateAsync(session, cancellationToken);
 
         await _auditService.TrackAuthenticationEventAsync(
@@ -764,7 +764,7 @@ public class MfaService : IMfaService
         session.StepVersion += 1;
         session.VerifiedAtUtc = DateTime.UtcNow;
         session.ExpiresAtUtc = validUntil;
-        session.UpdatedAtUtc = DateTime.UtcNow;
+        session.ModifiedAtUtc = DateTime.UtcNow;
         await _mfaManagementSessionRepository.UpdateAsync(session, cancellationToken);
 
         await _auditService.TrackSecurityEventAsync(
@@ -827,7 +827,7 @@ public class MfaService : IMfaService
         session.ContinuationToken = CreateContinuationToken();
         session.StepVersion += 1;
         session.ExpiresAtUtc = DateTime.UtcNow;
-        session.UpdatedAtUtc = DateTime.UtcNow;
+        session.ModifiedAtUtc = DateTime.UtcNow;
         await _mfaManagementSessionRepository.UpdateAsync(session, cancellationToken);
 
         await _auditService.TrackSecurityEventAsync(
@@ -880,7 +880,7 @@ public class MfaService : IMfaService
 
         session.Status = MfaManagementSessionStatuses.Cancelled;
         session.ExpiresAtUtc = DateTime.UtcNow;
-        session.UpdatedAtUtc = DateTime.UtcNow;
+        session.ModifiedAtUtc = DateTime.UtcNow;
         await _mfaManagementSessionRepository.UpdateAsync(session, cancellationToken);
 
         if (session.ChallengeId.HasValue)
@@ -1372,7 +1372,7 @@ public class MfaService : IMfaService
         session.ChallengeId = startResult.Data.EnrollmentTransactionId;
         session.ContinuationToken = CreateContinuationToken();
         session.StepVersion += 1;
-        session.UpdatedAtUtc = DateTime.UtcNow;
+        session.ModifiedAtUtc = DateTime.UtcNow;
         await _mfaLoginEnrollmentSessionRepository.UpdateAsync(session, cancellationToken);
 
         return Result<StartLoginEnrollmentResponse>.Success(
@@ -1580,7 +1580,7 @@ public class MfaService : IMfaService
         session.Status = MfaLoginEnrollmentSessionStatuses.ReadyToComplete;
         session.ContinuationToken = CreateContinuationToken();
         session.StepVersion += 1;
-        session.UpdatedAtUtc = DateTime.UtcNow;
+        session.ModifiedAtUtc = DateTime.UtcNow;
         await _mfaLoginEnrollmentSessionRepository.UpdateAsync(session, cancellationToken);
 
         var remainingSetupOptions = (await GetAvailableSetupMethodsAsync(userId, cancellationToken))
@@ -1673,7 +1673,7 @@ public class MfaService : IMfaService
         session.Status = MfaLoginEnrollmentSessionStatuses.Completed;
         session.CompletedAtUtc = DateTime.UtcNow;
         session.ExpiresAtUtc = DateTime.UtcNow;
-        session.UpdatedAtUtc = DateTime.UtcNow;
+        session.ModifiedAtUtc = DateTime.UtcNow;
         await _mfaLoginEnrollmentSessionRepository.UpdateAsync(session, cancellationToken);
 
         var (accessToken, refreshToken) = await _sessionFactory.CreateAuthenticatedSessionAsync(
@@ -1836,7 +1836,7 @@ public class MfaService : IMfaService
                     IsVerified = true,
                     ContactValue = challenge.ContactValue,
                     CreatedAtUtc = DateTime.UtcNow,
-                    UpdatedAtUtc = DateTime.UtcNow,
+                    ModifiedAtUtc = DateTime.UtcNow,
                 },
                 cancellationToken
             );
@@ -1846,7 +1846,7 @@ public class MfaService : IMfaService
             existing.IsEnabled = true;
             existing.IsVerified = true;
             existing.ContactValue = challenge.ContactValue;
-            existing.UpdatedAtUtc = DateTime.UtcNow;
+            existing.ModifiedAtUtc = DateTime.UtcNow;
 
             await _mfaMethodRepository.UpdateAsync(existing, cancellationToken);
         }
@@ -1947,7 +1947,7 @@ public class MfaService : IMfaService
         }
 
         currentMethod.IsEnabled = false;
-        currentMethod.UpdatedAtUtc = DateTime.UtcNow;
+        currentMethod.ModifiedAtUtc = DateTime.UtcNow;
         await _mfaMethodRepository.UpdateAsync(currentMethod, cancellationToken);
 
         if (normalizedMethod == MfaMethodTypes.Fido2)
@@ -2258,7 +2258,7 @@ public class MfaService : IMfaService
                     IsVerified = true,
                     ContactValue = challenge.ContactValue,
                     CreatedAtUtc = DateTime.UtcNow,
-                    UpdatedAtUtc = DateTime.UtcNow,
+                    ModifiedAtUtc = DateTime.UtcNow,
                 },
                 cancellationToken
             );
@@ -2268,7 +2268,7 @@ public class MfaService : IMfaService
             existing.IsEnabled = true;
             existing.IsVerified = true;
             existing.ContactValue = challenge.ContactValue;
-            existing.UpdatedAtUtc = DateTime.UtcNow;
+            existing.ModifiedAtUtc = DateTime.UtcNow;
             await _mfaMethodRepository.UpdateAsync(existing, cancellationToken);
         }
 

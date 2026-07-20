@@ -10,5 +10,7 @@ public class UserMfaMethod
     public bool IsVerified { get; set; }
     public string? ContactValue { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ModifiedAtUtc { get; set; } = DateTime.UtcNow;
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 }

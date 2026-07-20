@@ -7,7 +7,7 @@ public class EnrollmentItem
     public string Status { get; set; } = default!;
     public int StepVersion { get; set; }
     public DateTime CreatedAtUtc { get; set; }
-    public DateTime UpdatedAtUtc { get; set; }
+    public DateTime ModifiedAtUtc { get; set; }
     public DateTime ExpiresAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
 }

@@ -12,5 +12,7 @@ public class MfaLoginEnrollmentSession
     public DateTime ExpiresAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ModifiedAtUtc { get; set; } = DateTime.UtcNow;
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 }

@@ -30,7 +30,7 @@ public class MfaLoginEnrollmentSessionRepository : IMfaLoginEnrollmentSessionRep
                 ExpiresAtUtc = session.ExpiresAtUtc,
                 CompletedAtUtc = session.CompletedAtUtc,
                 CreatedAtUtc = session.CreatedAtUtc,
-                UpdatedAtUtc = session.UpdatedAtUtc,
+                ModifiedAtUtc = session.ModifiedAtUtc,
             },
             cancellationToken
         );
@@ -83,7 +83,7 @@ public class MfaLoginEnrollmentSessionRepository : IMfaLoginEnrollmentSessionRep
         persisted.ChallengeId = session.ChallengeId;
         persisted.ExpiresAtUtc = session.ExpiresAtUtc;
         persisted.CompletedAtUtc = session.CompletedAtUtc;
-        persisted.UpdatedAtUtc = session.UpdatedAtUtc;
+        persisted.ModifiedAtUtc = session.ModifiedAtUtc;
 
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -109,7 +109,7 @@ public class MfaLoginEnrollmentSessionRepository : IMfaLoginEnrollmentSessionRep
         {
             session.Status = MfaLoginEnrollmentSessionStatuses.Cancelled;
             session.ExpiresAtUtc = now;
-            session.UpdatedAtUtc = now;
+            session.ModifiedAtUtc = now;
         }
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -129,7 +129,7 @@ public class MfaLoginEnrollmentSessionRepository : IMfaLoginEnrollmentSessionRep
             ExpiresAtUtc = session.ExpiresAtUtc,
             CompletedAtUtc = session.CompletedAtUtc,
             CreatedAtUtc = session.CreatedAtUtc,
-            UpdatedAtUtc = session.UpdatedAtUtc,
+            ModifiedAtUtc = session.ModifiedAtUtc,
         };
     }
 }

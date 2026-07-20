@@ -65,7 +65,9 @@ Métodos MFA habilitados por usuario (SMS, Email, FIDO2).
 | `IsVerified` | `bit` | NOT NULL | Si fue verificado durante enrollment |
 | `ContactValue` | `nvarchar(320)` | NULL | Teléfono o email de contacto |
 | `CreatedAtUtc` | `datetime2` | NOT NULL | Fecha de creación |
-| `UpdatedAtUtc` | `datetime2` | NOT NULL | Última actualización |
+| `ModifiedAtUtc` | `datetime2` | NOT NULL | Última actualización |
+| `CreatedBy` | `nvarchar(450)` | NULL | Usuario que creó el registro |
+| `ModifiedBy` | `nvarchar(450)` | NULL | Usuario que modificó el registro |
 
 **Índices:** `IX_UserMfaMethods_UserId_Method` (unique), `IX_UserMfaMethods_UserId_IsEnabled`, `IX_UserMfaMethods_Method_ContactValue_Active` (filtered `WHERE IsEnabled = 1`)
 
@@ -191,6 +193,8 @@ Challenges MFA activos y completados (OTP, recovery code, FIDO2 selection).
 | `IpAddress` | `nvarchar(100)` | NULL | IP del cliente |
 | `UserAgent` | `nvarchar(500)` | NULL | User-Agent del cliente |
 | `CreatedAtUtc` | `datetime2` | NOT NULL | Fecha de creación |
+| `CreatedBy` | `nvarchar(450)` | NULL | Usuario que creó el registro |
+| `ModifiedBy` | `nvarchar(450)` | NULL | Usuario que modificó el registro |
 
 **Statuses:** `pending` → `verified` → `consumed` / `locked` / `expired` / `revoked` / `failed`
 
@@ -233,7 +237,9 @@ Sesiones de enrollment MFA durante el login (usuarios sin MFA configurado).
 | `ExpiresAtUtc` | `datetime2` | NOT NULL | Expiración (10 min) |
 | `CompletedAtUtc` | `datetime2` | NULL | Fecha de completación |
 | `CreatedAtUtc` | `datetime2` | NOT NULL | Fecha de creación |
-| `UpdatedAtUtc` | `datetime2` | NOT NULL | Última actualización |
+| `ModifiedAtUtc` | `datetime2` | NOT NULL | Última actualización |
+| `CreatedBy` | `nvarchar(450)` | NULL | Usuario que creó el registro |
+| `ModifiedBy` | `nvarchar(450)` | NULL | Usuario que modificó el registro |
 
 ---
 
@@ -252,7 +258,9 @@ Sesiones de administración de métodos MFA (step-up requerido).
 | `ExpiresAtUtc` | `datetime2` | NOT NULL | Expiración |
 | `VerifiedAtUtc` | `datetime2` | NULL | Fecha en que completó el step-up |
 | `CreatedAtUtc` | `datetime2` | NOT NULL | Fecha de creación |
-| `UpdatedAtUtc` | `datetime2` | NOT NULL | Última actualización |
+| `ModifiedAtUtc` | `datetime2` | NOT NULL | Última actualización |
+| `CreatedBy` | `nvarchar(450)` | NULL | Usuario que creó el registro |
+| `ModifiedBy` | `nvarchar(450)` | NULL | Usuario que modificó el registro |
 
 ---
 

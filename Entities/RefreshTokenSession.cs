@@ -14,4 +14,6 @@ public class RefreshTokenSession
     public Guid? PreviousTokenSessionId { get; set; }
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 }

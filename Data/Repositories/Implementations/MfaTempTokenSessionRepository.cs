@@ -25,7 +25,7 @@ public class MfaTempTokenSessionRepository : IMfaTempTokenSessionRepository
                 TokenJti = session.TokenJti,
                 ExpiresAtUtc = session.ExpiresAtUtc,
                 CreatedAtUtc = session.IssuedAtUtc,
-                UpdatedAtUtc = session.IssuedAtUtc,
+                ModifiedAtUtc = session.IssuedAtUtc,
                 MfaTransactionId = session.MfaTransactionId,
                 IssuedAtUtc = session.IssuedAtUtc,
                 ConsumedAtUtc = session.ConsumedAtUtc,

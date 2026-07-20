@@ -1,5 +1,6 @@
 using Authentication.Fido2.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Authentication.Fido2.Data;
 
@@ -30,6 +31,12 @@ public class ApplicationDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+
+        foreach (var foreignKey in modelBuilder.Model.GetEntityTypes().SelectMany(entityType => entityType.GetForeignKeys()))
+        {
+            foreignKey.DeleteBehavior = DeleteBehavior.NoAction;
+        }
+
         base.OnModelCreating(modelBuilder);
         
     }
